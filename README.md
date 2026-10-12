@@ -63,7 +63,7 @@ Referencias: [API REST de Supabase](https://supabase.com/docs/guides/api), [clav
 
 Supabase es la base predeterminada, también en Streamlit Cloud mediante `st.secrets`. Si faltan claves, la app muestra el error y no cambia automáticamente de base. Para usar el modo local de forma explícita, configura `STORAGE_BACKEND = "sqlite"`. En ese modo la app usa SQLite y guarda registros y archivos en `data/expedientes.sqlite3`, excluido de Git. `DIAPOCALIPSIS_DATA_DIR` permite cambiar la carpeta. Respáldala para conservar todo. No se migran registros locales a Supabase automáticamente.
 
-Las fuentes Bodoni Moda, Cormorant Garamond y DM Sans se cargan desde Google Fonts, con fuentes locales de respaldo si no hay conexión. La ilustración original está incluida y funciona sin conexión; la portada muestra su parte artística y los detalles descargables reflejan el horario vigente.
+Las fuentes Bodoni Moda, Cormorant Garamond y DM Sans se cargan desde Google Fonts, con fuentes locales de respaldo si no hay conexión. La ilustración original está incluida y funciona sin conexión; la portada muestra la invitación completa en su resolución original. El PNG conserva el texto de la invitación inicial; los detalles de la app y el archivo descargable reflejan el horario y la dinámica vigentes.
 
 ## Verificación
 

@@ -40,7 +40,6 @@ p,li,label,[data-testid="stCaptionContainer"] {font-family:'DM Sans',sans-serif;
 
 [data-baseweb="tab"][aria-selected="true"] {color:#d4867b;}
 
-/* Keep the original artwork while hiding its superseded logistics. */
+/* Keep the complete invitation at its original aspect ratio. */
 .st-key-poster {max-width:300px;}
-.st-key-poster [data-testid="stImage"] img {width:100%;height:265px;object-fit:cover;object-position:top;}
-.st-key-poster [data-testid="stImage"] button {display:none;}
+.st-key-poster [data-testid="stImage"] img {width:100%;height:auto;}

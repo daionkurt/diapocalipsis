@@ -175,6 +175,37 @@ class PartyTest(unittest.TestCase):
         self.assertEqual(len(app.get("file_uploader")), 0)
 
 
+    def test_change_participation_and_preserve_single_document(self):
+        token = storage.register("Invitada", "invite@example.com", presenting=False)
+        storage.update(1, token, "Invitada", "invite@example.com", "La Luna", presenting=True)
+        self.assertTrue(storage.is_presenter(storage.lookup("invite@example.com", token)))
+        storage.update(1, token, "Invitada", "invite@example.com", "La Luna", ("secret.txt", b"evidencia"), now=BEFORE, presenting=True)
+        storage.set_presenting(1, token, False)
+        self.assertFalse(storage.is_presenter(storage.lookup("invite@example.com", token)))
+        self.assertEqual(storage.evidence(1), ("secret.txt", b"evidencia"))
+        storage.set_presenting(1, token, True)
+        with self.assertRaises(storage.AlreadySubmittedError):
+            storage.update(1, token, "Invitada", "invite@example.com", "La Luna", ("again.txt", b"otro"), now=BEFORE, presenting=True)
+        with self.assertRaises(ValueError):
+            storage.set_presenting(1, "wrong", False)
+
+    def test_dossier_checkbox_reveals_topic_and_upload(self):
+        token = storage.register("Invitada", "invite@example.com", presenting=False)
+        app = AppTest.from_file(str(Path(__file__).resolve().parents[1] / "app.py"))
+        app.session_state["guest_access"] = (1, token, "invite@example.com")
+        app.run()
+        self.assertFalse(any(t.label == "Tema" for t in app.text_input))
+        next(c for c in app.checkbox if c.key == "dossier_present_1").check().run()
+        self.assertTrue(any("cambiando de opinión" in m.value for m in app.info))
+        next(t for t in app.text_input if t.label == "Tema").set_value("La Luna")
+        next(b for b in app.button if b.label == "Guardar expediente").click().run()
+        self.assertFalse(app.exception)
+        self.assertTrue(storage.is_presenter(storage.lookup("invite@example.com", token)))
+        next(c for c in app.checkbox if c.key == "dossier_present_1").uncheck().run()
+        next(b for b in app.button if b.label == "Guardar expediente").click().run()
+        self.assertFalse(storage.is_presenter(storage.lookup("invite@example.com", token)))
+
+
     def test_registration_ui_and_admin_privacy(self):
         app = AppTest.from_file(str(Path(__file__).resolve().parents[1] / "app.py")).run()
         self.assertEqual(len(app.exception), 0)

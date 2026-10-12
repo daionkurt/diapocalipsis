@@ -208,12 +208,16 @@ def lookup(email, token):
     return None
 
 
-def update(guest_id, token, name, email, topic, upload=None, now=None):
+def update(guest_id, token, name, email, topic, upload=None, now=None, presenting=None):
+    if presenting is False:
+        if upload:
+            raise ValueError("Activa Quiero presentar para entregar un documento.")
+        topic = "Solo asistencia"
     name, email, topic = validate_fields(name, email, topic)
     filename = validate_evidence(*upload, now=now) if upload else None
     remote = remote_store()
     if remote:
-        return remote.update(guest_id, token, name, email, topic, (filename, upload[1]) if upload else None)
+        return remote.update(guest_id, token, name, email, topic, (filename, upload[1]) if upload else None, presenting=presenting)
     with closing(connect()) as conn, conn:
         conn.execute("BEGIN IMMEDIATE")
         row = conn.execute("SELECT token_hash FROM guests WHERE id=?", (guest_id,)).fetchone()
@@ -222,11 +226,23 @@ def update(guest_id, token, name, email, topic, upload=None, now=None):
         if conn.execute("SELECT 1 FROM evidence WHERE guest_id=?", (guest_id,)).fetchone():
             raise AlreadySubmittedError()
         try:
-            conn.execute("UPDATE guests SET name=?,email=?,topic=? WHERE id=?", (name, email, topic, guest_id))
+            conn.execute("UPDATE guests SET name=?,email=?,topic=?,is_presenter=COALESCE(?,is_presenter) WHERE id=?", (name, email, topic, presenting, guest_id))
         except sqlite3.IntegrityError:
             raise ValueError("Ese correo ya pertenece a otro expediente.") from None
         if upload:
             conn.execute("INSERT INTO evidence VALUES(?,?,?,?)", (guest_id, filename, upload[1], datetime.now(TZ).isoformat()))
+
+
+def set_presenting(guest_id, token, presenting):
+    """Change participation without replacing submitted evidence or contact details."""
+    remote = remote_store()
+    if remote:
+        return remote.set_presenting(guest_id, token, presenting)
+    with closing(connect()) as conn, conn:
+        cur = conn.execute("UPDATE guests SET is_presenter=? WHERE id=? AND token_hash=?",
+                           (int(presenting), guest_id, key_hash(token)))
+        if cur.rowcount != 1:
+            raise ValueError("La clave de acceso no coincide.")
 
 
 def guests():

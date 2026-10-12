@@ -93,3 +93,5 @@ Referencias: [API de envío de Resend](https://resend.com/docs/api-reference/ema
 ### Asistencia sin presentación
 
 El checkbox **Quiero presentar** muestra tema y documento al activarse. Sin marcarlo, nombre y correo bastan para confirmar asistencia: no se pide evidencia y no se asigna turno de exposición. En proyectos existentes, ejecuta `supabase/attendance.sql` antes de desplegar; los registros anteriores conservan su condición de expositores.
+
+En **Mi expediente** puedes cambiar **Quiero presentar** y guardar tu selección. Al activarlo se muestran tema y documento. Si ya entregaste evidencia, puedes cambiar tu participación y seguir consultando el archivo; se conserva el límite de una entrega por correo.

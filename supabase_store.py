@@ -127,7 +127,7 @@ class SupabaseStore:
             return rows[0]
         return None
 
-    def update(self, guest_id, token, name, email, topic, upload=None):
+    def update(self, guest_id, token, name, email, topic, upload=None, presenting=None):
         token_hash = key_hash(token)
         matches = self.request("GET", TABLE, query={"select": "id,file_path", "id": f"eq.{guest_id}", "token_hash": "eq." + token_hash, "limit": 1})
         if not matches:
@@ -136,12 +136,20 @@ class SupabaseStore:
             raise AlreadySubmittedError()
         uploaded = self.upload(*upload) if upload else None
         payload = {"name": name, "email": email, "topic": topic}
+        if presenting is not None:
+            payload["is_presenter"] = bool(presenting)
         if uploaded:
             payload.update(uploaded)
         rows = self.write("PATCH", payload, {"id": f"eq.{guest_id}", "token_hash": "eq." + token_hash, "file_path": "is.null"}, uploaded)
         if not rows:
             self.discard_rejected_upload(uploaded)
             raise AlreadySubmittedError()
+
+    def set_presenting(self, guest_id, token, presenting):
+        rows = self.request("PATCH", TABLE, query={"id": f"eq.{guest_id}", "token_hash": "eq." + key_hash(token)},
+                            payload={"is_presenter": bool(presenting)})
+        if not rows:
+            raise ValueError("La clave de acceso no coincide.")
 
     def registration_status(self, email):
         rows = self.request("GET", TABLE, query={"select": "file_path", "email": "eq." + email.strip().lower(), "limit": 1})

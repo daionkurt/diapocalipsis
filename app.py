@@ -87,10 +87,10 @@ def review_document(pending):
         return
     try:
         if pending["action"] == "register":
-            token = storage.register(pending["name"], pending["email"], pending["topic"], pending["upload"])
+            token = storage.register(pending["name"], pending["email"], pending["topic"], pending["upload"], presenting=pending.get("presenting", True))
         else:
             token = pending["token"]
-            storage.update(pending["id"], token, pending["name"], pending["email"], pending["topic"], pending["upload"])
+            storage.update(pending["id"], token, pending["name"], pending["email"], pending["topic"], pending["upload"], presenting=pending.get("presenting", True))
     except (storage.AlreadySubmittedError, storage.AlreadyRegisteredError):
         st.session_state.pop("pending_document", None)
         if pending["action"] == "register":
@@ -274,21 +274,39 @@ def my_dossier():
         st.session_state.pop("guest_access", None)
         st.rerun()
     existing = storage.evidence_name(guest["id"])
-    if not storage.is_presenter(guest):
-        submission_confirmation(guest)
-    elif existing:
+    presenting = st.checkbox("Quiero presentar", value=storage.is_presenter(guest), key=f'dossier_present_{guest["id"]}')
+    if presenting != storage.is_presenter(guest):
+        if presenting:
+            st.info("¿Aaah, cambiando de opinión? El comité de conspiraciones te espera. Tu archivo secreto ya está listo." if existing else "¿Aaah, cambiando de opinión? Bien. Sube tu archivo secreto… el comité de conspiraciones te espera.")
+        else:
+            st.info("¿Prefieres investigar desde tu silla? Perfecto. Tu lugar sigue reservado; guarda el cambio y disfruta los secretos ajenos.")
+    if existing:
+        if presenting != storage.is_presenter(guest) and st.button("Guardar mi selección", type="primary"):
+            try:
+                storage.set_presenting(guest["id"], access[1], presenting)
+            except (ValueError, storage.StorageError) as exc:
+                st.error(str(exc))
+            else:
+                st.session_state.edited_success = True
+                st.rerun()
         submission_confirmation(guest)
         file = storage.evidence(guest["id"])
         if file:
             show_document(file[0], file[1], guest["id"])
     else:
-        st.info("Tu lugar está confirmado. Tu documento sigue pendiente.")
+        if presenting == storage.is_presenter(guest):
+            if presenting:
+                st.info("Tu lugar está confirmado. Tu documento sigue pendiente.")
+            else:
+                st.success("Tu asistencia está confirmada. Vienes a escuchar los secretos.")
         with st.form("edit_guest"):
             name = st.text_input("Nombre", value=guest["name"], max_chars=80)
             new_email = st.text_input("Correo", value=guest["email"], max_chars=254)
-            topic = st.text_input("Tema", value=guest["topic"], max_chars=160)
-            upload = st.file_uploader("Entregar mi documento", disabled=datetime.now(storage.TZ) >= storage.DEADLINE)
-            st.caption("Una sola entrega por correo. Revisa tu documento antes de enviarlo.")
+            topic, upload = "Solo asistencia", None
+            if presenting:
+                topic = st.text_input("Tema", value=guest["topic"] if storage.is_presenter(guest) else "", max_chars=160)
+                upload = st.file_uploader("Entregar mi documento", disabled=datetime.now(storage.TZ) >= storage.DEADLINE)
+                st.caption("Una sola entrega por correo. Revisa tu documento antes de enviarlo.")
             save = st.form_submit_button("Guardar expediente", type="primary")
         if save:
             try:
@@ -296,9 +314,9 @@ def my_dossier():
                 evidence = upload_tuple(upload)
                 if evidence:
                     storage.validate_evidence(*evidence)
-                    st.session_state.pending_document = {"action": "update", "id": guest["id"], "token": access[1], "name": name, "email": new_email, "topic": topic, "upload": evidence}
+                    st.session_state.pending_document = {"action": "update", "id": guest["id"], "token": access[1], "name": name, "email": new_email, "topic": topic, "upload": evidence, "presenting": presenting}
                     st.rerun()
-                storage.update(guest["id"], access[1], name, new_email, topic)
+                storage.update(guest["id"], access[1], name, new_email, topic, presenting=presenting)
             except storage.AlreadySubmittedError:
                 st.rerun()
             except (ValueError, storage.StorageError) as exc:
@@ -312,6 +330,7 @@ def my_dossier():
                 st.session_state.edited_success = True
                 st.rerun()
     if st.button("Cerrar mi expediente"):
+        st.session_state.pop(f'dossier_present_{guest["id"]}', None)
         for key in ("guest_access", "recovered_key", "receipt", "receipt_email"):
             st.session_state.pop(key, None)
         st.rerun()

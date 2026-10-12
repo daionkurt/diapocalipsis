@@ -407,7 +407,7 @@ with left:
         st.caption("TE LO ADVERTIMOS: DESPUÉS DE ESTA NOCHE, NADA SERÁ IGUAL.")
 with right:
     with st.container(key="poster"):
-        st.image(str(ROOT / "assets/invitacion.png"), width=300)
+        st.image(str(ROOT / "assets/invitacion.png"), width="stretch", output_format="PNG")
 
 try:
     rows = storage.guests()

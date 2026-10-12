@@ -9,10 +9,10 @@ from urllib.request import Request, urlopen
 from uuid import uuid4
 
 from settings import setting
-from storage import StorageError
+from storage import StorageError, content_type, CONTENT_TYPES
 
 TABLE = "/rest/v1/diapocalipsis_guests"
-LIST_COLUMNS = "id,name,email,topic,category,created_at,position,presented,filename"
+LIST_COLUMNS = "id,name,email,topic,created_at,position,presented,filename"
 
 
 class RemoteError(StorageError):
@@ -68,7 +68,7 @@ class SupabaseStore:
 
     def upload(self, filename, contents):
         path = f"expedientes/{uuid4().hex}{Path(filename).suffix.lower()}"
-        mime = "application/pdf" if filename.lower().endswith(".pdf") else "application/octet-stream"
+        mime = content_type(filename)
         self.request("POST", self.object_route(self.bucket, path), contents=contents, content_type=mime)
         return {"filename": filename, "file_path": path, "file_bucket": self.bucket}
 
@@ -92,10 +92,10 @@ class SupabaseStore:
                 raise ValueError("No se aceptó el archivo: la recepción cerró o la evidencia no está disponible en el bucket privado.") from None
             raise
 
-    def register(self, name, email, topic, category, upload=None):
+    def register(self, name, email, topic, upload=None):
         token = secrets.token_urlsafe(32)
         uploaded = self.upload(*upload) if upload else None
-        payload = {"name": name, "email": email, "topic": topic, "category": category, "token_hash": sha256(token.encode()).hexdigest()}
+        payload = {"name": name, "email": email, "topic": topic, "category": "Otro misterio", "token_hash": sha256(token.encode()).hexdigest()}
         if uploaded:
             payload.update(uploaded)
         try:
@@ -116,13 +116,13 @@ class SupabaseStore:
             return rows[0]
         return None
 
-    def update(self, guest_id, token, name, email, topic, category, upload=None):
+    def update(self, guest_id, token, name, email, topic, upload=None):
         token_hash = sha256(token.strip().encode()).hexdigest()
         matches = self.request("GET", TABLE, query={"select": "id", "id": f"eq.{guest_id}", "token_hash": "eq." + token_hash, "limit": 1})
         if not matches:
             raise ValueError("La clave de acceso no coincide.")
         uploaded = self.upload(*upload) if upload else None
-        payload = {"name": name, "email": email, "topic": topic, "category": category}
+        payload = {"name": name, "email": email, "topic": topic}
         if uploaded:
             payload.update(uploaded)
         rows = self.write("PATCH", payload, {"id": f"eq.{guest_id}", "token_hash": "eq." + token_hash}, uploaded)
@@ -166,3 +166,6 @@ class SupabaseStore:
             raise StorageError("El bucket de presentaciones debe ser privado.")
         if not bucket.get("file_size_limit") or bucket["file_size_limit"] < 50 * 1024 * 1024:
             raise StorageError("El bucket debe permitir archivos de hasta 50 MB.")
+        allowed = bucket.get("allowed_mime_types")
+        if allowed is not None and not set(CONTENT_TYPES.values()).issubset(allowed):
+            raise StorageError("Faltan formatos permitidos en el bucket. Ejecuta supabase/update_formats.sql en SQL Editor.")

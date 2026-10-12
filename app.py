@@ -11,7 +11,6 @@ import streamlit as st
 import storage
 
 ROOT = Path(__file__).parent
-CATEGORIES = ["Conspiraciones", "Sucesos paranormales", "Seres de otros mundos", "Monstruos y leyendas", "Otro misterio"]
 SAFETY_PROTOCOL = (
     "**⚠️ Protocolo de Seguridad:**\n\n"
     "Para mantener un ambiente seguro, si tu tema toca violencia gráfica, "
@@ -57,8 +56,7 @@ def register_form():
         name = a.text_input("Tu nombre", placeholder="¿Quién está detrás de la teoría?", max_chars=80)
         email = b.text_input("Tu correo", placeholder="nombre@correo.com", max_chars=254)
         topic = st.text_input("El tema de tu presentación", placeholder="Ej. ¿Y si la Luna es una estación espacial?", max_chars=160)
-        category = st.selectbox("Tipo de misterio", CATEGORIES)
-        upload = st.file_uploader("Tu evidencia · PDF o Keynote", type=["pdf", "key"], disabled=datetime.now(storage.TZ) >= storage.DEADLINE,
+        upload = st.file_uploader("Tu documento · PDF, KEY, PPTX, Word o TXT", type=storage.ALLOWED_EXTENSIONS, disabled=datetime.now(storage.TZ) >= storage.DEADLINE,
                                   help="Hasta 50 MB. Para Keynote usa un archivo .key; si tu Mac lo guarda como carpeta, exporta a PDF.")
         st.warning(SAFETY_PROTOCOL)
         st.caption("Puedes registrarte ahora y subir tu presentación después con tu clave. Recepción hasta el 23 de octubre de 2026, 12:00 p.m. (Ciudad de México).")
@@ -69,7 +67,7 @@ def register_form():
             st.error("Confirma que aceptas aparecer en la cartelera para abrir tu expediente.")
             return
         try:
-            token = storage.register(name, email, topic, category, upload_tuple(upload))
+            token = storage.register(name, email, topic, upload_tuple(upload))
         except ValueError as exc:
             st.error(str(exc))
         except storage.StorageError as exc:
@@ -110,14 +108,13 @@ def my_dossier():
         name = st.text_input("Nombre", value=guest["name"], max_chars=80)
         new_email = st.text_input("Correo", value=guest["email"], max_chars=254)
         topic = st.text_input("Tema", value=guest["topic"], max_chars=160)
-        category = st.selectbox("Misterio", CATEGORIES, index=CATEGORIES.index(guest["category"]) if guest["category"] in CATEGORIES else 0)
-        upload = st.file_uploader("Entregar o reemplazar presentación", type=["pdf", "key"], disabled=datetime.now(storage.TZ) >= storage.DEADLINE)
+        upload = st.file_uploader("Entregar o reemplazar presentación", type=storage.ALLOWED_EXTENSIONS, disabled=datetime.now(storage.TZ) >= storage.DEADLINE)
         st.warning(SAFETY_PROTOCOL)
         st.caption("Si no eliges otro archivo, conservaremos la presentación anterior.")
         save = st.form_submit_button("Guardar expediente", type="primary")
     if save:
         try:
-            storage.update(guest["id"], access[1], name, new_email, topic, category, upload_tuple(upload))
+            storage.update(guest["id"], access[1], name, new_email, topic, upload_tuple(upload))
         except ValueError as exc:
             st.error(str(exc))
         except storage.StorageError as exc:
@@ -136,13 +133,11 @@ def my_dossier():
 def lineup(rows):
     st.subheader("La cartelera de lo inexplicable")
     html('<div class="section-note">Una noche. Muchas teorías. Ve descubriendo quiénes traerán las pruebas.</div>')
-    selected = st.selectbox("Explorar por misterio", ["Todos los expedientes"] + CATEGORIES)
-    filtered = [r for r in rows if selected == "Todos los expedientes" or r["category"] == selected]
-    if not filtered:
+    if not rows:
         st.info("Aún no hay expedientes aquí. El próximo misterio puede ser el tuyo.")
-    for row in filtered:
+    for row in rows:
         state = "Caso expuesto" if row["presented"] else "Evidencia recibida" if row["filename"] else "Evidencia pendiente"
-        html(f'<div class="dossier"><div class="meta">EXP. {row["id"]:03d} · {escape(row["category"])}</div><h3>{escape(row["topic"])}</h3><div class="who">{escape(row["name"])} &nbsp; / &nbsp; {state}</div></div>')
+        html(f'<div class="dossier"><div class="meta">EXP. {row["id"]:03d}</div><h3>{escape(row["topic"])}</h3><div class="who">{escape(row["name"])} &nbsp; / &nbsp; {state}</div></div>')
     st.caption("El orden de exposición se confirma con el organizador. 20 minutos de presentación + 5 a 10 minutos de debate por expediente.")
 
 
@@ -154,7 +149,7 @@ def invitation():
         ("◴", "La dinámica", "20 minutos exactos para exponer.<br>5 a 10 minutos de debate y preguntas."),
         ("♧", "Menú del terror", "Bebidas, botana y cena terroríficas para sobrevivir a la noche."),
         ("♜", "El outfit", "Un look relacionado a tu tema o a tu película de terror favorita. Un sombrero o gorro de aluminio también cuenta."),
-        ("✉", "Recepción de evidencia", "PDF o Keynote, a más tardar el viernes 23 a las 12:00 p.m. Sube tu archivo aquí o envíalo a alejandrofls@icloud.com."),
+        ("✉", "Recepción de evidencia", "PDF, Keynote, PowerPoint (.pptx), Word (.doc/.docx) o TXT, a más tardar el viernes 23 a las 12:00 p.m. Sube tu archivo aquí o envíalo a alejandrofls@icloud.com."),
     ]
     for start in (0, 3):
         columns = st.columns(3)
@@ -197,7 +192,6 @@ def organizer(rows):
         when = storage.EVENT + timedelta(minutes=i * (20 + debate))
         with st.expander(f'{i + 1:02d} · {when.strftime("%H:%M")} · {row["name"]} — {row["topic"]}'):
             st.write(f'Correo: {row["email"]}')
-            st.write(f'Tema: {row["category"]}')
             st.caption("Horario estimado, sin incluir pausas ni cena.")
             with st.form(f'order_{row["id"]}'):
                 position = st.number_input("Turno", min_value=1, value=row["position"], step=1)
@@ -207,15 +201,15 @@ def organizer(rows):
                     st.rerun()
             if row["filename"]:
                 file = storage.evidence(row["id"])
-                st.download_button("Descargar evidencia", file[1], file_name=file[0], key=f'download_{row["id"]}', mime="application/pdf" if file[0].lower().endswith(".pdf") else "application/octet-stream")
+                st.download_button("Descargar evidencia", file[1], file_name=file[0], key=f'download_{row["id"]}', mime=storage.content_type(file[0]))
             else:
                 st.warning("Presentación pendiente.")
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["Turno", "Nombre", "Email", "Tema", "Categoría", "Archivo", "Expuso"])
+    writer.writerow(["Turno", "Nombre", "Email", "Tema", "Archivo", "Expuso"])
     for row in rows:
         # Prevent spreadsheet formula execution in user-provided cells.
-        cells = [row["position"], row["name"], row["email"], row["topic"], row["category"], row["filename"] or "Pendiente", "Sí" if row["presented"] else "No"]
+        cells = [row["position"], row["name"], row["email"], row["topic"], row["filename"] or "Pendiente", "Sí" if row["presented"] else "No"]
         writer.writerow(["'" + c if isinstance(c, str) and c.lstrip().startswith(("=", "+", "-", "@")) else c for c in cells])
     st.download_button("Exportar lista de asistentes · CSV", output.getvalue().encode("utf-8-sig"), file_name="diapocalipsis-asistentes.csv", mime="text/csv")
 

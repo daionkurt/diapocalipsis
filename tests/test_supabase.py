@@ -48,13 +48,13 @@ class SupabaseTest(unittest.TestCase):
         self.store.request = Mock(return_value=[])
         self.store.upload = Mock()
         with self.assertRaisesRegex(ValueError, "clave"):
-            self.store.update(7, 'wrong', 'Ana', 'ana@example.com', 'Área 51', 'Conspiraciones', ('a.pdf', b'%PDF-1.7'))
+            self.store.update(7, 'wrong', 'Ana', 'ana@example.com', 'Área 51', ('a.pdf', b'%PDF-1.7'))
         self.store.upload.assert_not_called()
         self.assertEqual(self.store.request.call_count, 1)
 
     def test_update_filters_identity_and_preserves_old_file_without_upload(self):
         self.store.request = Mock(side_effect=[[{'id': 7}], [{'id': 7}]])
-        self.store.update(7, 'private-token', 'Ana', 'ana@example.com', 'Área 51', 'Conspiraciones')
+        self.store.update(7, 'private-token', 'Ana', 'ana@example.com', 'Área 51')
         call = self.store.request.call_args
         self.assertEqual(call.args, ('PATCH', TABLE))
         self.assertEqual(call.kwargs['query']['token_hash'], 'eq.' + sha256(b'private-token').hexdigest())
@@ -75,7 +75,7 @@ class SupabaseTest(unittest.TestCase):
         self.store.write = Mock(side_effect=storage.StorageError('timeout'))
         self.store.lookup = Mock(return_value={'id': 7})
         with patch('supabase_store.secrets.token_urlsafe', return_value='private-recovery-token'):
-            token = self.store.register('Ana', 'ana@example.com', 'Área 51', 'Conspiraciones')
+            token = self.store.register('Ana', 'ana@example.com', 'Área 51')
         self.assertEqual(token, 'private-recovery-token')
         self.store.lookup.assert_called_once_with('ana@example.com', token)
 

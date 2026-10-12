@@ -7,7 +7,8 @@ CREATE TABLE IF NOT EXISTS public.diapocalipsis_guests (
     name text NOT NULL CHECK (char_length(trim(name)) BETWEEN 2 AND 80),
     email text NOT NULL UNIQUE CHECK (email = lower(trim(email)) AND char_length(email) <= 254),
     topic text NOT NULL CHECK (char_length(trim(topic)) BETWEEN 3 AND 160),
-    category text NOT NULL CHECK (category IN ('Conspiraciones','Sucesos paranormales','Seres de otros mundos','Monstruos y leyendas','Otro misterio')),
+    -- Compatibilidad con registros previos; este campo ya no se usa en la app.
+    category text NOT NULL DEFAULT 'Otro misterio' CHECK (category IN ('Conspiraciones','Sucesos paranormales','Seres de otros mundos','Monstruos y leyendas','Otro misterio')),
     token_hash text NOT NULL CHECK (token_hash ~ '^[a-f0-9]{64}$'),
     created_at timestamptz NOT NULL DEFAULT now(),
     position bigint CHECK (position > 0),
@@ -28,8 +29,10 @@ GRANT USAGE, SELECT ON SEQUENCE public.diapocalipsis_guests_id_seq TO service_ro
 -- El bucket se crea PRIVADO. El script no vacía ni borra archivos.
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 VALUES ('presentaciones', 'presentaciones', false, 52428800,
-    ARRAY['application/pdf', 'application/octet-stream'])
-ON CONFLICT (id) DO NOTHING;
+    ARRAY['application/pdf', 'application/octet-stream', 'application/vnd.openxmlformats-officedocument.presentationml.presentation', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'])
+ON CONFLICT (id) DO UPDATE SET
+    allowed_mime_types = EXCLUDED.allowed_mime_types,
+    file_size_limit = GREATEST(storage.buckets.file_size_limit, EXCLUDED.file_size_limit);
 
 CREATE OR REPLACE FUNCTION public.diapocalipsis_validate_evidence()
 RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $$

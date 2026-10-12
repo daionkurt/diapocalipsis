@@ -23,9 +23,9 @@ El panel permite ver correos, descargar presentaciones, cambiar turnos, marcar q
 
 ## Para los invitados
 
-- Registra nombre, email y tema; el archivo es opcional para confirmar asistencia.
+- Registra nombre, email y tema, sin elegir un tipo de misterio; el archivo es opcional para confirmar asistencia.
 - Guarda la clave privada que muestra la app. Usa esa clave y tu correo en **Mi expediente** para editar tus datos o reemplazar tu presentación. Un correo ya registrado no se puede sobrescribir sin la clave.
-- PDF y Keynote (`.key`), máximo 50 MB. Si Keynote se guarda como carpeta o en un formato antiguo, expórtalo a PDF.
+- PDF (`.pdf`), Keynote (`.key`), PowerPoint (`.pptx`), Word (`.doc`/`.docx`) y texto (`.txt`), máximo 50 MB. Si Keynote se guarda como carpeta o en un formato antiguo, expórtalo a PDF.
 - Las cargas cierran el **23 de octubre de 2026 a las 12:00 p.m., zona America/Mexico_City**. El registro y las ediciones de tema siguen disponibles.
 - La cartelera muestra nombre, tema y estado; correos y archivos quedan en el acceso del organizador.
 - Subir un archivo **no envía un correo**. La invitación también permite enviarlo por tu cuenta a Alejandro.
@@ -47,6 +47,8 @@ La app ya tiene integración con Supabase por HTTPS, sin necesitar la contraseñ
 3. Ejecuta `python3 scripts/check_supabase.py`. Esta comprobación solo lee y confirma la tabla y el bucket privado. Recarga la app.
 
 La URL de este proyecto ya está configurada localmente; falta una clave nueva y ejecutar el SQL. Mientras la configuración esté incompleta, la app muestra el pendiente y no registra asistentes en otra base por accidente. Las pruebas locales usan respuestas simuladas para los casos de Supabase; la conexión real requiere completar estos pasos.
+
+Si ya ejecutaste el SQL anterior, ejecuta `supabase/update_formats.sql` para ampliar los formatos del bucket sin cambiar registros ni archivos. En instalaciones nuevas, `setup.sql` ya incluye todos los formatos. El campo de categoría antiguo se conserva internamente por compatibilidad, pero ya no se solicita, muestra ni exporta.
 
 La tabla guarda solo el hash de la clave del invitado. Correos, claves y presentaciones no tienen acceso público. Cada nueva carga usa una ruta aleatoria: al reemplazar un archivo se conserva su versión anterior privada para evitar perder evidencia ante fallos o cargas simultáneas. Los archivos sin referencia que queden por una respuesta de red incierta pueden revisarse manualmente en Storage; nunca se eliminan automáticamente tras un timeout.
 

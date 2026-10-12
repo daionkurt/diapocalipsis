@@ -12,4 +12,4 @@ if __name__ == "__main__":
     except StorageError as exc:
         print(f"Pendiente: {exc}")
         sys.exit(1)
-    print("Supabase conectado: tabla disponible y bucket privado de 50 MB.")
+    print("Supabase conectado: tabla disponible, bucket privado de 50 MB y todos los formatos permitidos.")

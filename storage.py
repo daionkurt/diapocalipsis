@@ -16,6 +16,19 @@ TZ = ZoneInfo("America/Mexico_City")
 DEADLINE = datetime(2026, 10, 23, 12, tzinfo=TZ)
 EVENT = datetime(2026, 10, 23, 18, 30, tzinfo=TZ)
 MAX_BYTES = 50 * 1024 * 1024
+ALLOWED_EXTENSIONS = ["pdf", "key", "pptx", "doc", "docx", "txt"]
+CONTENT_TYPES = {
+    ".pdf": "application/pdf",
+    ".key": "application/octet-stream",
+    ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    ".doc": "application/msword",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".txt": "text/plain",
+}
+
+
+def content_type(filename):
+    return CONTENT_TYPES.get(Path(filename).suffix.lower(), "application/octet-stream")
 
 
 class StorageError(Exception):
@@ -75,32 +88,50 @@ def validate_evidence(filename, contents, now=None):
     if suffix == ".pdf":
         if not contents.startswith(b"%PDF-"):
             raise ValueError("Ese archivo no tiene una cabecera PDF válida.")
-    elif suffix == ".key":
+    elif suffix in {".key", ".pptx", ".docx"}:
         try:
             with zipfile.ZipFile(BytesIO(contents)) as archive:
                 names = archive.namelist()
-                if not any(n.startswith("Index/") or n.endswith("index.apxl") for n in names):
+                if suffix == ".pptx" and not {"[Content_Types].xml", "ppt/presentation.xml"}.issubset(names):
+                    raise ValueError("El archivo no parece una presentación PPTX válida.")
+                if suffix == ".docx" and not {"[Content_Types].xml", "word/document.xml"}.issubset(names):
+                    raise ValueError("El archivo no parece un documento Word DOCX válido.")
+                if suffix == ".key" and not any(n.startswith("Index/") or n.endswith("index.apxl") for n in names):
                     raise ValueError("El archivo no parece una presentación de Keynote. Exporta a PDF si es necesario.")
         except zipfile.BadZipFile:
-            raise ValueError("No se reconoce este Keynote. Guarda como archivo .key o exporta a PDF.") from None
+            raise ValueError("No se reconoce el documento. Usa un archivo KEY, PPTX o DOCX válido, o exporta a PDF.") from None
+    elif suffix == ".doc":
+        if not contents.startswith(bytes.fromhex("d0cf11e0a1b11ae1")):
+            raise ValueError("El archivo no tiene una cabecera Word DOC válida. Guarda como DOCX o PDF.")
+    elif suffix == ".txt":
+        encoding = "utf-16" if contents.startswith((b"\xff\xfe", b"\xfe\xff")) else "utf-8-sig"
+        try:
+            text = contents.decode(encoding)
+        except UnicodeDecodeError:
+            try:
+                text = contents.decode("cp1252")
+            except UnicodeDecodeError:
+                raise ValueError("No se reconoce el texto. Guarda tu TXT con codificación UTF-8.") from None
+        if any((ord(c) < 32 and c not in "\n\r\t\f") or ord(c) == 127 for c in text):
+            raise ValueError("El TXT contiene datos binarios. Sube un archivo de texto legible.")
     else:
-        raise ValueError("Solo recibimos PDF (.pdf) o Keynote (.key).")
+        raise ValueError("Recibimos PDF, KEY, PPTX, Word (.doc/.docx) o TXT.")
     return filename
 
 
-def register(name, email, topic, category, upload=None, now=None):
+def register(name, email, topic, upload=None, now=None):
     name, email, topic = validate_fields(name, email, topic)
     filename = validate_evidence(*upload, now=now) if upload else None
     remote = remote_store()
     if remote:
-        return remote.register(name, email, topic, category, (filename, upload[1]) if upload else None)
+        return remote.register(name, email, topic, (filename, upload[1]) if upload else None)
     token = secrets.token_urlsafe(32)
     with closing(connect()) as conn, conn:
         position = conn.execute("SELECT COALESCE(MAX(position), 0)+1 FROM guests").fetchone()[0]
         try:
             cur = conn.execute(
                 "INSERT INTO guests(name,email,topic,category,token_hash,created_at,position) VALUES(?,?,?,?,?,?,?)",
-                (name, email, topic, category, sha256(token.encode()).hexdigest(), datetime.now(TZ).isoformat(), position),
+                (name, email, topic, "Otro misterio", sha256(token.encode()).hexdigest(), datetime.now(TZ).isoformat(), position),
             )
         except sqlite3.IntegrityError:
             raise ValueError("Este correo ya tiene un expediente. Usa tu clave en ‘Mi expediente’ para actualizarlo.") from None
@@ -120,18 +151,18 @@ def lookup(email, token):
     return None
 
 
-def update(guest_id, token, name, email, topic, category, upload=None, now=None):
+def update(guest_id, token, name, email, topic, upload=None, now=None):
     name, email, topic = validate_fields(name, email, topic)
     filename = validate_evidence(*upload, now=now) if upload else None
     remote = remote_store()
     if remote:
-        return remote.update(guest_id, token, name, email, topic, category, (filename, upload[1]) if upload else None)
+        return remote.update(guest_id, token, name, email, topic, (filename, upload[1]) if upload else None)
     with closing(connect()) as conn, conn:
         row = conn.execute("SELECT token_hash FROM guests WHERE id=?", (guest_id,)).fetchone()
         if not row or not secrets.compare_digest(row[0], sha256(token.strip().encode()).hexdigest()):
             raise ValueError("La clave de acceso no coincide.")
         try:
-            conn.execute("UPDATE guests SET name=?,email=?,topic=?,category=? WHERE id=?", (name, email, topic, category, guest_id))
+            conn.execute("UPDATE guests SET name=?,email=?,topic=? WHERE id=?", (name, email, topic, guest_id))
         except sqlite3.IntegrityError:
             raise ValueError("Ese correo ya pertenece a otro expediente.") from None
         if upload:
@@ -143,7 +174,7 @@ def guests():
     if remote:
         return remote.guests()
     with closing(connect()) as conn:
-        return [dict(r) for r in conn.execute("""SELECT g.id,g.name,g.email,g.topic,g.category,g.created_at,g.position,g.presented,
+        return [dict(r) for r in conn.execute("""SELECT g.id,g.name,g.email,g.topic,g.created_at,g.position,g.presented,
             e.filename FROM guests g LEFT JOIN evidence e ON e.guest_id=g.id ORDER BY g.position,g.id""")]
 
 

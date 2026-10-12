@@ -9,6 +9,7 @@ import sqlite3
 import streamlit as st
 import storage
 from settings import setting
+from document_preview import show_document
 
 ROOT = Path(__file__).parent
 SAFETY_PROTOCOL = (
@@ -194,6 +195,9 @@ def my_dossier():
     existing = storage.evidence_name(guest["id"])
     if existing:
         submission_confirmation(guest)
+        file = storage.evidence(guest["id"])
+        if file:
+            show_document(file[0], file[1], guest["id"])
     else:
         st.info("Tu lugar está confirmado. Tu documento sigue pendiente.")
         with st.form("edit_guest"):

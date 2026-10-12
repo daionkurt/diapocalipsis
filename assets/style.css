@@ -46,3 +46,20 @@ p,li,label,[data-testid="stCaptionContainer"] {font-family:'DM Sans',sans-serif;
 
 /* Hide Streamlit keyboard hints that overlap text in compact input fields. */
 [data-testid="InputInstructions"] {display:none!important;}
+
+/* Streamlit sets running immediately, before server-side database work finishes. */
+.stApp[data-test-script-state="running"] .st-key-registration_panel [data-testid="stFormSubmitButton"] button {
+    pointer-events:none;cursor:wait;opacity:.8;
+}
+.stApp[data-test-script-state="running"] .st-key-registration_panel [data-testid="stFormSubmitButton"] button p {font-size:0;}
+.stApp[data-test-script-state="running"] .st-key-registration_panel [data-testid="stFormSubmitButton"] button p::after {
+    content:"Registrando…";font-size:14px;
+}
+.stApp[data-test-script-state="running"] .st-key-registration_panel [data-testid="stFormSubmitButton"] button::before {
+    content:"";width:16px;height:16px;flex-shrink:0;border:2px solid currentColor;border-right-color:transparent;
+    border-radius:50%;animation:registration-spin .8s linear infinite;
+}
+@keyframes registration-spin {to {transform:rotate(360deg);}}
+@media (prefers-reduced-motion:reduce) {
+    .stApp[data-test-script-state="running"] .st-key-registration_panel [data-testid="stFormSubmitButton"] button::before {animation:none;}
+}

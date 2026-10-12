@@ -131,47 +131,49 @@ def register_form():
     st.subheader("Abre tu expediente")
     html('<div class="section-note">Toda teoría necesita un testigo. Confirma tu asistencia y elige si quieres presentar.</div>')
     presenting = st.checkbox("Quiero presentar", key="wants_to_present")
-    with st.form("registration", clear_on_submit=False):
-        left, right = st.columns(2)
-        name = left.text_input("Tu nombre", placeholder="¿Quién está detrás de la teoría?", max_chars=80)
-        email = right.text_input("Tu correo", placeholder="nombre@correo.com", max_chars=254, key="registration_email")
-        topic, upload = "Solo asistencia", None
-        if presenting:
-            topic = st.text_input("El tema de tu presentación", placeholder="Ej. ¿Y si la Luna es una estación espacial?", max_chars=160)
-            upload = st.file_uploader("Tu documento", disabled=datetime.now(storage.TZ) >= storage.DEADLINE,
-                                      help="Hasta 50 MB. Un solo documento por correo.")
-            st.caption("Puedes registrarte ahora y subir tu presentación después con tu clave. Recepción hasta el 23 de octubre de 2026, 5:00 p.m..")
-        consent_label = ("Acepto que mi nombre y tema aparezcan en la cartelera; mi correo y archivo serán visibles para el organizador." if presenting else "Acepto que mi nombre aparezca en la cartelera; mi correo será visible para el organizador.")
-        consent = st.checkbox(consent_label)
-        submitted = st.form_submit_button("Confirmar mi asistencia  →", type="primary", width="stretch")
+    with st.container(key="registration_panel"):
+        with st.form("registration", clear_on_submit=False, enter_to_submit=False):
+            left, right = st.columns(2)
+            name = left.text_input("Tu nombre", placeholder="¿Quién está detrás de la teoría?", max_chars=80)
+            email = right.text_input("Tu correo", placeholder="nombre@correo.com", max_chars=254, key="registration_email")
+            topic, upload = "Solo asistencia", None
+            if presenting:
+                topic = st.text_input("El tema de tu presentación", placeholder="Ej. ¿Y si la Luna es una estación espacial?", max_chars=160)
+                upload = st.file_uploader("Tu documento", disabled=datetime.now(storage.TZ) >= storage.DEADLINE,
+                                          help="Hasta 50 MB. Un solo documento por correo.")
+                st.caption("Puedes registrarte ahora y subir tu presentación después con tu clave. Recepción hasta el 23 de octubre de 2026, 5:00 p.m..")
+            consent_label = ("Acepto que mi nombre y tema aparezcan en la cartelera; mi correo y archivo serán visibles para el organizador." if presenting else "Acepto que mi nombre aparezca en la cartelera; mi correo será visible para el organizador.")
+            consent = st.checkbox(consent_label)
+            submitted = st.form_submit_button("Confirmar mi asistencia  →", type="primary", width="stretch")
     if submitted:
-        try:
-            email = storage.normalize_email(email)
-            status = storage.registration_status(email)
-            if status["registered"]:
+        with st.spinner("Registrando tu asistencia…", show_time=True):
+            try:
+                email = storage.normalize_email(email)
+                status = storage.registration_status(email)
+                if status["registered"]:
+                    st.session_state.blocked_email = email
+                    st.rerun()
+                if not consent:
+                    st.error("Confirma que aceptas aparecer en la cartelera para abrir tu expediente.")
+                    return
+                name, email, topic = storage.validate_fields(name, email, topic)
+                evidence = upload_tuple(upload)
+                if evidence:
+                    storage.validate_evidence(*evidence)
+                    st.session_state.pending_document = {"action": "register", "name": name, "email": email, "topic": topic, "upload": evidence}
+                    st.rerun()
+                token = storage.register(name, email, topic, presenting=presenting)
+            except (storage.AlreadySubmittedError, storage.AlreadyRegisteredError):
                 st.session_state.blocked_email = email
                 st.rerun()
-            if not consent:
-                st.error("Confirma que aceptas aparecer en la cartelera para abrir tu expediente.")
-                return
-            name, email, topic = storage.validate_fields(name, email, topic)
-            evidence = upload_tuple(upload)
-            if evidence:
-                storage.validate_evidence(*evidence)
-                st.session_state.pending_document = {"action": "register", "name": name, "email": email, "topic": topic, "upload": evidence}
+            except (ValueError, storage.StorageError) as exc:
+                st.error(str(exc))
+            except (OSError, sqlite3.Error):
+                st.error("No pudimos guardar el expediente. Intenta de nuevo o contacta al organizador.")
+            else:
+                st.session_state.receipt = token
+                st.session_state.receipt_email = email
                 st.rerun()
-            token = storage.register(name, email, topic, presenting=presenting)
-        except (storage.AlreadySubmittedError, storage.AlreadyRegisteredError):
-            st.session_state.blocked_email = email
-            st.rerun()
-        except (ValueError, storage.StorageError) as exc:
-            st.error(str(exc))
-        except (OSError, sqlite3.Error):
-            st.error("No pudimos guardar el expediente. Intenta de nuevo o contacta al organizador.")
-        else:
-            st.session_state.receipt = token
-            st.session_state.receipt_email = email
-            st.rerun()
 
 
 def forgot_key():

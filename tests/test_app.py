@@ -5,6 +5,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 import zipfile
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 
 import storage
 from streamlit.testing.v1 import AppTest
@@ -80,13 +82,62 @@ class PartyTest(unittest.TestCase):
             with self.subTest(filename=upload[0]), self.assertRaises(ValueError):
                 storage.validate_evidence(*upload, now=BEFORE)
 
+    def test_memorable_key_case_and_old_key_compatibility(self):
+        token = storage.register("Ana", "ana@example.com", "La Luna")
+        self.assertRegex(token, r"^[a-z]+-[a-z]+-\d{4}$")
+        self.assertIsNotNone(storage.lookup("ANA@example.com", token.upper()))
+        old_token = "Old_CaseSensitive_Key_123"
+        with closing(storage.connect()) as conn, conn:
+            conn.execute("UPDATE guests SET token_hash=? WHERE id=1", (storage.key_hash(old_token),))
+        self.assertIsNotNone(storage.lookup("ana@example.com", old_token))
+        self.assertIsNone(storage.lookup("ana@example.com", old_token.lower()))
+
+    def test_one_submission_by_email_and_no_email_change(self):
+        token = storage.register("Ana", "ana@example.com", "La Luna", ("primero.txt", b"Original"), now=BEFORE)
+        with self.assertRaises(storage.AlreadySubmittedError):
+            storage.register("Ana", " ANA@example.com ", "La Luna", ("segundo.txt", b"Nuevo"), now=BEFORE)
+        with self.assertRaises(storage.AlreadySubmittedError):
+            storage.update(1, token, "Ana", "otro@example.com", "Otro tema", ("segundo.txt", b"Nuevo"), now=BEFORE)
+        self.assertEqual(storage.evidence(1), ("primero.txt", b"Original"))
+        self.assertEqual(storage.guests()[0]["email"], "ana@example.com")
+
+    def test_simultaneous_submissions_only_accept_one(self):
+        token = storage.register("Ana", "ana@example.com", "La Luna")
+        def submit(index):
+            try:
+                storage.update(1, token, "Ana", "ana@example.com", "La Luna", (f"{index}.txt", str(index).encode()), now=BEFORE)
+                return True
+            except storage.AlreadySubmittedError:
+                return False
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            self.assertEqual(sum(pool.map(submit, range(2))), 1)
+
+    def test_success_hides_form_and_refresh_detects_email(self):
+        token = storage.register("Ana", "ana@example.com", "La Luna", ("pruebas.txt", b"Evidencia"), now=BEFORE)
+        path = str(Path(__file__).resolve().parents[1] / "app.py")
+        app = AppTest.from_file(path)
+        app.session_state["receipt"] = token
+        app.session_state["receipt_email"] = "ana@example.com"
+        app.session_state["guest_access"] = (1, token, "ana@example.com")
+        app.run()
+        self.assertFalse(app.exception)
+        self.assertEqual(len(app.get("file_uploader")), 0)
+        self.assertFalse(any(b.label == "Confirmar mi asistencia  →" for b in app.button))
+        self.assertTrue(any("Ya subiste" in s.value for s in app.success))
+        self.assertTrue(any("pruebas.txt" in m.value for m in app.markdown))
+        fresh = AppTest.from_file(path).run()
+        next(t for t in fresh.text_input if t.label == "Tu correo").set_value("ANA@example.com").run()
+        self.assertFalse(fresh.exception)
+        self.assertEqual(len(fresh.get("file_uploader")), 0)
+        self.assertTrue(any("ya subió" in s.value for s in fresh.success))
+
     def test_registration_ui_and_admin_privacy(self):
         app = AppTest.from_file(str(Path(__file__).resolve().parents[1] / "app.py")).run()
         self.assertEqual(len(app.exception), 0)
         self.assertEqual(len(app.selectbox), 0)
-        app.text_input[0].set_value("Ana")
-        app.text_input[1].set_value("ana@example.com")
-        app.text_input[2].set_value("Los secretos de la Luna")
+        next(t for t in app.text_input if t.label == "Tu nombre").set_value("Ana")
+        next(t for t in app.text_input if t.label == "Tu correo").set_value("ana@example.com")
+        next(t for t in app.text_input if t.label == "El tema de tu presentación").set_value("Los secretos de la Luna")
         app.checkbox[0].check()
         app.button[0].click().run()
         self.assertEqual(len(app.exception), 0)

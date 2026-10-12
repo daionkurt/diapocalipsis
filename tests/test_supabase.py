@@ -59,6 +59,7 @@ class SupabaseTest(unittest.TestCase):
         self.assertEqual(call.args, ('PATCH', TABLE))
         self.assertEqual(call.kwargs['query']['token_hash'], 'eq.' + sha256(b'private-token').hexdigest())
         self.assertNotIn('file_path', call.kwargs['payload'])
+        self.assertEqual(call.kwargs['query']['file_path'], 'is.null')
 
     def test_definite_duplicate_cleans_new_upload_but_timeout_keeps_it(self):
         upload = {'file_bucket': 'presentaciones', 'file_path': 'expedientes/new.pdf'}
@@ -74,7 +75,8 @@ class SupabaseTest(unittest.TestCase):
     def test_lost_registration_response_recovers_exact_token(self):
         self.store.write = Mock(side_effect=storage.StorageError('timeout'))
         self.store.lookup = Mock(return_value={'id': 7})
-        with patch('supabase_store.secrets.token_urlsafe', return_value='private-recovery-token'):
+        self.store.registration_status = Mock(return_value={'registered': False, 'submitted': False})
+        with patch('supabase_store.make_access_key', return_value='private-recovery-token'):
             token = self.store.register('Ana', 'ana@example.com', 'Área 51')
         self.assertEqual(token, 'private-recovery-token')
         self.store.lookup.assert_called_once_with('ana@example.com', token)
@@ -83,6 +85,30 @@ class SupabaseTest(unittest.TestCase):
         self.store.request = Mock(side_effect=[[], {'public': True, 'file_size_limit': 52428800}])
         with self.assertRaisesRegex(storage.StorageError, 'privado'):
             self.store.check()
+
+    def test_duplicate_email_is_blocked_before_upload(self):
+        self.store.request = Mock(return_value=[{'file_path': 'original.txt'}])
+        self.store.upload = Mock()
+        with self.assertRaises(storage.AlreadySubmittedError):
+            self.store.register('Ana', 'ana@example.com', 'La Luna', ('nuevo.txt', b'New'))
+        self.store.upload.assert_not_called()
+
+    def test_existing_file_is_blocked_even_with_valid_key(self):
+        self.store.request = Mock(return_value=[{'id': 7, 'file_path': 'original.txt'}])
+        self.store.upload = Mock()
+        with self.assertRaises(storage.AlreadySubmittedError):
+            self.store.update(7, 'private-token', 'Ana', 'ana@example.com', 'La Luna', ('nuevo.txt', b'New'))
+        self.store.upload.assert_not_called()
+
+    def test_race_discards_only_unlinked_new_file(self):
+        self.store.request = Mock(side_effect=[[{'id': 7, 'file_path': None}], []])
+        uploaded = {'file_path': 'new.txt', 'file_bucket': 'presentaciones', 'filename': 'new.txt'}
+        self.store.upload = Mock(return_value=uploaded)
+        self.store.discard_rejected_upload = Mock()
+        with self.assertRaises(storage.AlreadySubmittedError):
+            self.store.update(7, 'private-token', 'Ana', 'ana@example.com', 'La Luna', ('new.txt', b'New'))
+        self.store.discard_rejected_upload.assert_called_once_with(uploaded)
+        self.assertEqual(self.store.request.call_args.kwargs['query']['file_path'], 'is.null')
 
 
 if __name__ == '__main__':

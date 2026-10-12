@@ -25,6 +25,28 @@ CONTENT_TYPES = {
     ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     ".txt": "text/plain",
 }
+KEY_WORDS = (
+    "luna", "ovni", "nave", "bruja", "sombra", "cuervo", "bosque", "noche",
+    "niebla", "brujo", "rayo", "astro", "portal", "cosmos", "cometa", "saturno",
+    "marte", "venus", "orion", "pluton", "dragon", "kraken", "momia", "duende",
+    "troll", "hada", "elfo", "ogro", "lobo", "gato", "buho", "runa",
+    "capa", "cetro", "vela", "craneo", "torre", "cripta", "tumba", "castillo",
+    "eco", "susurro", "enigma", "arcano", "hechizo", "ritual", "amuleto", "aura",
+    "alien", "mutante", "espectro", "fantasma", "zombi", "vampiro", "sable", "reliquia",
+    "eclipse", "estrella", "galaxia", "abismo", "destino", "secreto", "mito", "magia",
+)
+
+
+def make_access_key():
+    return f"{secrets.choice(KEY_WORDS)}-{secrets.choice(KEY_WORDS)}-{secrets.randbelow(10000):04d}"
+
+
+def key_hash(token):
+    token = token.strip()
+    # New memorable keys ignore letter case; existing long keys keep their original spelling.
+    if re.fullmatch(r"[A-Za-z]+-[A-Za-z]+-\d{4}", token):
+        token = token.lower()
+    return sha256(token.encode()).hexdigest()
 
 
 def content_type(filename):
@@ -33,6 +55,11 @@ def content_type(filename):
 
 class StorageError(Exception):
     """Safe, actionable storage error that can be shown to a guest."""
+
+
+class AlreadySubmittedError(ValueError):
+    def __init__(self):
+        super().__init__("Este correo ya subió un documento. Tu evidencia ya está recibida; no puedes subir otra.")
 
 
 def remote_store():
@@ -125,13 +152,17 @@ def register(name, email, topic, upload=None, now=None):
     remote = remote_store()
     if remote:
         return remote.register(name, email, topic, (filename, upload[1]) if upload else None)
-    token = secrets.token_urlsafe(32)
+    token = make_access_key()
     with closing(connect()) as conn, conn:
+        conn.execute("BEGIN IMMEDIATE")
+        existing = conn.execute("SELECT e.guest_id FROM guests g LEFT JOIN evidence e ON e.guest_id=g.id WHERE g.email=?", (email,)).fetchone()
+        if existing and existing[0] is not None:
+            raise AlreadySubmittedError()
         position = conn.execute("SELECT COALESCE(MAX(position), 0)+1 FROM guests").fetchone()[0]
         try:
             cur = conn.execute(
                 "INSERT INTO guests(name,email,topic,category,token_hash,created_at,position) VALUES(?,?,?,?,?,?,?)",
-                (name, email, topic, "Otro misterio", sha256(token.encode()).hexdigest(), datetime.now(TZ).isoformat(), position),
+                (name, email, topic, "Otro misterio", key_hash(token), datetime.now(TZ).isoformat(), position),
             )
         except sqlite3.IntegrityError:
             raise ValueError("Este correo ya tiene un expediente. Usa tu clave en ‘Mi expediente’ para actualizarlo.") from None
@@ -146,7 +177,7 @@ def lookup(email, token):
         return remote.lookup(email, token)
     with closing(connect()) as conn:
         row = conn.execute("SELECT * FROM guests WHERE email=?", (email.strip().lower(),)).fetchone()
-    if row and secrets.compare_digest(row["token_hash"], sha256(token.strip().encode()).hexdigest()):
+    if row and secrets.compare_digest(row["token_hash"], key_hash(token)):
         return dict(row)
     return None
 
@@ -158,15 +189,18 @@ def update(guest_id, token, name, email, topic, upload=None, now=None):
     if remote:
         return remote.update(guest_id, token, name, email, topic, (filename, upload[1]) if upload else None)
     with closing(connect()) as conn, conn:
+        conn.execute("BEGIN IMMEDIATE")
         row = conn.execute("SELECT token_hash FROM guests WHERE id=?", (guest_id,)).fetchone()
-        if not row or not secrets.compare_digest(row[0], sha256(token.strip().encode()).hexdigest()):
+        if not row or not secrets.compare_digest(row[0], key_hash(token)):
             raise ValueError("La clave de acceso no coincide.")
+        if conn.execute("SELECT 1 FROM evidence WHERE guest_id=?", (guest_id,)).fetchone():
+            raise AlreadySubmittedError()
         try:
             conn.execute("UPDATE guests SET name=?,email=?,topic=? WHERE id=?", (name, email, topic, guest_id))
         except sqlite3.IntegrityError:
             raise ValueError("Ese correo ya pertenece a otro expediente.") from None
         if upload:
-            conn.execute("INSERT OR REPLACE INTO evidence VALUES(?,?,?,?)", (guest_id, filename, upload[1], datetime.now(TZ).isoformat()))
+            conn.execute("INSERT INTO evidence VALUES(?,?,?,?)", (guest_id, filename, upload[1], datetime.now(TZ).isoformat()))
 
 
 def guests():
@@ -202,3 +236,14 @@ def evidence_name(guest_id):
     with closing(connect()) as conn:
         row = conn.execute("SELECT filename FROM evidence WHERE guest_id=?", (guest_id,)).fetchone()
         return row[0] if row else None
+
+
+def registration_status(email):
+    """Return only enrollment/upload flags; email alone never grants private access."""
+    email = email.strip().lower()
+    remote = remote_store()
+    if remote:
+        return remote.registration_status(email)
+    with closing(connect()) as conn:
+        row = conn.execute("SELECT e.guest_id FROM guests g LEFT JOIN evidence e ON e.guest_id=g.id WHERE g.email=?", (email,)).fetchone()
+        return {"registered": row is not None, "submitted": bool(row and row[0] is not None)}

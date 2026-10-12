@@ -24,9 +24,10 @@ El panel permite ver correos, descargar presentaciones, cambiar turnos, marcar q
 ## Para los invitados
 
 - Registra nombre, email y tema, sin elegir un tipo de misterio; el archivo es opcional para confirmar asistencia.
-- Guarda la clave privada que muestra la app. Usa esa clave y tu correo en **Mi expediente** para editar tus datos o reemplazar tu presentación. Un correo ya registrado no se puede sobrescribir sin la clave.
+- Guarda tu clave corta, con un formato como `luna-ovni-4826`. Usa esa clave y tu correo en **Mi expediente** para consultar tu entrega o completar tus datos antes de entregar. Las claves largas anteriores siguen funcionando. Las claves nuevas aceptan mayúsculas y minúsculas.
 - PDF (`.pdf`), Keynote (`.key`), PowerPoint (`.pptx`), Word (`.doc`/`.docx`) y texto (`.txt`), máximo 50 MB. Si Keynote se guarda como carpeta o en un formato antiguo, expórtalo a PDF.
-- Las cargas cierran el **23 de octubre de 2026 a las 12:00 p.m., zona America/Mexico_City**. El registro y las ediciones de tema siguen disponibles.
+- Las cargas cierran el **23 de octubre de 2026 a las 12:00 p.m., zona America/Mexico_City**. Puedes registrarte sin archivo y completar el expediente después; una vez entregado el documento, el expediente queda confirmado y se ocultan los formularios.
+- Solo se acepta **un documento por correo**, incluso si vuelves a abrir la app o intentas cambiar de correo después de la entrega. Al terminar, verás la confirmación y el nombre del archivo en lugar del formulario.
 - La cartelera muestra nombre, tema y estado; correos y archivos quedan en el acceso del organizador.
 - Subir un archivo **no envía un correo**. La invitación también permite enviarlo por tu cuenta a Alejandro.
 
@@ -46,11 +47,11 @@ La app ya tiene integración con Supabase por HTTPS, sin necesitar la contraseñ
    Conserva `ADMIN_PASSWORD`. Si compartiste una clave en un chat o captura, revócala y usa una nueva. La clave secreta debe permanecer en el servidor; no se publica en Git ni se envía al navegador de los invitados.
 3. Ejecuta `python3 scripts/check_supabase.py`. Esta comprobación solo lee y confirma la tabla y el bucket privado. Recarga la app.
 
-La URL de este proyecto ya está configurada localmente; falta una clave nueva y ejecutar el SQL. Mientras la configuración esté incompleta, la app muestra el pendiente y no registra asistentes en otra base por accidente. Las pruebas locales usan respuestas simuladas para los casos de Supabase; la conexión real requiere completar estos pasos.
+La URL de este proyecto ya está configurada localmente. Mientras la configuración esté incompleta, la app muestra el pendiente y no registra asistentes en otra base por accidente. Las pruebas locales usan respuestas simuladas para los casos de Supabase; `scripts/check_supabase.py` verifica la conexión real sin mostrar claves ni datos de invitados.
 
-Si ya ejecutaste el SQL anterior, ejecuta `supabase/update_formats.sql` para ampliar los formatos del bucket sin cambiar registros ni archivos. En instalaciones nuevas, `setup.sql` ya incluye todos los formatos. El campo de categoría antiguo se conserva internamente por compatibilidad, pero ya no se solicita, muestra ni exporta.
+Si ya ejecutaste el SQL anterior, ejecuta `python3 scripts/update_supabase_formats.py` para agregar los nuevos formatos al bucket por API, o usa `supabase/update_formats.sql` en SQL Editor. En instalaciones nuevas, `setup.sql` ya incluye todos los formatos. El campo de categoría antiguo se conserva internamente por compatibilidad, pero ya no se solicita, muestra ni exporta.
 
-La tabla guarda solo el hash de la clave del invitado. Correos, claves y presentaciones no tienen acceso público. Cada nueva carga usa una ruta aleatoria: al reemplazar un archivo se conserva su versión anterior privada para evitar perder evidencia ante fallos o cargas simultáneas. Los archivos sin referencia que queden por una respuesta de red incierta pueden revisarse manualmente en Storage; nunca se eliminan automáticamente tras un timeout.
+La tabla guarda solo el hash de la clave del invitado. Correos, claves y presentaciones no tienen acceso público. Cada carga usa una ruta aleatoria. La app verifica el correo antes de cargar y actualiza solo expedientes sin documento, para impedir que dos entregas simultáneas sobrescriban evidencia. La protección adicional `supabase/lock_submissions.sql` bloquea cambiar un archivo ya recibido o reasignar su correo desde PostgreSQL; `setup.sql` ya la incluye para instalaciones nuevas. Los archivos sin referencia que queden por una respuesta de red incierta pueden revisarse manualmente en Storage; nunca se eliminan automáticamente tras un timeout.
 
 El nombre del bucket del SQL es `presentaciones`; si lo cambias, cambia también `SUPABASE_STORAGE_BUCKET`. Los archivos subidos se guardan en Supabase y no se envían automáticamente al correo del organizador.
 

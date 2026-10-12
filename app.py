@@ -39,25 +39,51 @@ def upload_tuple(upload):
     return (upload.name, upload.getvalue()) if upload is not None else None
 
 
-def receipt():
-    if st.session_state.get("receipt"):
+def submission_confirmation(guest, token=None):
+    filename = storage.evidence_name(guest["id"])
+    if filename:
+        st.success("Ya subiste tu documento. Tu evidencia está recibida.")
+        st.write(f"Archivo: {filename}")
+        st.caption("Aceptamos un solo documento por correo. No necesitas volver a enviarlo.")
+    else:
         st.success("Asistencia confirmada. Tu expediente ya está abierto.")
-        st.markdown("**Guarda tu clave privada.** La necesitarás para cambiar tu tema o entregar tu presentación después.")
-        st.code(st.session_state.receipt, language=None)
-        st.download_button("Guardar mi clave", f"DIAPOCALIPSIS · Clave privada\n{st.session_state.receipt}\n\nUsa tu correo y esta clave en Mi expediente.\n", file_name="mi-clave-diapocalipsis.txt", mime="text/plain")
+        st.info("Tu documento sigue pendiente. Entrégalo desde Mi expediente con tu correo y clave.")
+    st.write(f'Tema: {guest["topic"]}')
+    if token:
+        st.markdown("**Guarda tu clave privada** para consultar tu expediente o entregar el documento pendiente.")
+        st.code(token, language=None)
+        st.download_button("Guardar mi clave", f"DIAPOCALIPSIS · Clave privada\n{token}\n\nUsa tu correo y esta clave en Mi expediente.\n", file_name="mi-clave-diapocalipsis.txt", mime="text/plain")
 
 
 def register_form():
+    receipt_email = st.session_state.get("receipt_email")
+    token = st.session_state.get("receipt")
+    if receipt_email and token:
+        guest = storage.lookup(receipt_email, token)
+        if guest:
+            submission_confirmation(guest, token)
+            if st.button("Registrar a otra persona"):
+                for key in ("receipt", "receipt_email", "guest_access", "registration_email"):
+                    st.session_state.pop(key, None)
+                st.rerun()
+            return
     st.subheader("Abre tu expediente")
     html('<div class="section-note">Toda teoría necesita un testigo. Confirma tu asistencia y cuéntanos qué vas a revelar.</div>')
-    receipt()
+    email = st.text_input("Tu correo", placeholder="nombre@correo.com", max_chars=254, key="registration_email")
+    if "@" in email and "." in email.rsplit("@", 1)[-1]:
+        status = storage.registration_status(email)
+        if status["submitted"]:
+            st.success("Este correo ya subió un documento. Tu evidencia ya está recibida.")
+            st.caption("Aceptamos un solo documento por correo. Puedes consultar el expediente con tu clave en Mi expediente.")
+            return
+        if status["registered"]:
+            st.info("Este correo ya está registrado. Abre Mi expediente con tu clave para entregar tu documento pendiente.")
+            return
     with st.form("registration", clear_on_submit=False):
-        a, b = st.columns(2)
-        name = a.text_input("Tu nombre", placeholder="¿Quién está detrás de la teoría?", max_chars=80)
-        email = b.text_input("Tu correo", placeholder="nombre@correo.com", max_chars=254)
+        name = st.text_input("Tu nombre", placeholder="¿Quién está detrás de la teoría?", max_chars=80)
         topic = st.text_input("El tema de tu presentación", placeholder="Ej. ¿Y si la Luna es una estación espacial?", max_chars=160)
         upload = st.file_uploader("Tu documento · PDF, KEY, PPTX, Word o TXT", type=storage.ALLOWED_EXTENSIONS, disabled=datetime.now(storage.TZ) >= storage.DEADLINE,
-                                  help="Hasta 50 MB. Para Keynote usa un archivo .key; si tu Mac lo guarda como carpeta, exporta a PDF.")
+                                  help="Hasta 50 MB. Un solo documento por correo. Para Keynote usa un archivo .key; si tu Mac lo guarda como carpeta, exporta a PDF.")
         st.warning(SAFETY_PROTOCOL)
         st.caption("Puedes registrarte ahora y subir tu presentación después con tu clave. Recepción hasta el 23 de octubre de 2026, 12:00 p.m. (Ciudad de México).")
         consent = st.checkbox("Acepto que mi nombre y tema aparezcan en la cartelera; mi correo y archivo serán visibles para el organizador.")
@@ -68,6 +94,8 @@ def register_form():
             return
         try:
             token = storage.register(name, email, topic, upload_tuple(upload))
+        except storage.AlreadySubmittedError:
+            st.rerun()
         except ValueError as exc:
             st.error(str(exc))
         except storage.StorageError as exc:
@@ -76,6 +104,7 @@ def register_form():
             st.error("No pudimos guardar el expediente. Intenta de nuevo o contacta al organizador.")
         else:
             st.session_state.receipt = token
+            st.session_state.receipt_email = email.strip().lower()
             st.rerun()
 
 
@@ -83,48 +112,55 @@ def my_dossier():
     st.subheader("Tu evidencia, bajo llave")
     if st.session_state.pop("edited_success", False):
         st.success("Expediente actualizado.")
-    st.caption("Usa el correo y la clave privada que recibiste al confirmar tu asistencia.")
-    with st.form("access"):
-        email = st.text_input("Correo del expediente")
-        token = st.text_input("Clave privada", type="password")
-        submit = st.form_submit_button("Abrir mi expediente")
-    if submit:
-        guest = storage.lookup(email, token)
-        if guest:
-            st.session_state.guest_access = (guest["id"], token, email.strip().lower())
-        else:
-            st.session_state.pop("guest_access", None)
-            st.error("Correo o clave incorrectos. Si perdiste tu clave, contacta a Alejandro.")
     access = st.session_state.get("guest_access")
     if not access:
+        st.caption("Usa el correo y la clave privada que recibiste al confirmar tu asistencia.")
+        with st.form("access"):
+            email = st.text_input("Correo del expediente")
+            token = st.text_input("Clave privada", type="password")
+            submit = st.form_submit_button("Abrir mi expediente")
+        if submit:
+            guest = storage.lookup(email, token)
+            if guest:
+                st.session_state.guest_access = (guest["id"], token, email.strip().lower())
+                st.rerun()
+            else:
+                st.error("Correo o clave incorrectos. Si perdiste tu clave, contacta a Alejandro.")
         return
     guest = storage.lookup(access[2], access[1])
     if not guest:
         st.session_state.pop("guest_access", None)
-        return
+        st.rerun()
     existing = storage.evidence_name(guest["id"])
-    st.info(f"Evidencia recibida: {existing}" if existing else "Tu lugar está confirmado. Tu evidencia sigue pendiente.")
-    with st.form("edit_guest"):
-        name = st.text_input("Nombre", value=guest["name"], max_chars=80)
-        new_email = st.text_input("Correo", value=guest["email"], max_chars=254)
-        topic = st.text_input("Tema", value=guest["topic"], max_chars=160)
-        upload = st.file_uploader("Entregar o reemplazar presentación", type=storage.ALLOWED_EXTENSIONS, disabled=datetime.now(storage.TZ) >= storage.DEADLINE)
-        st.warning(SAFETY_PROTOCOL)
-        st.caption("Si no eliges otro archivo, conservaremos la presentación anterior.")
-        save = st.form_submit_button("Guardar expediente", type="primary")
-    if save:
-        try:
-            storage.update(guest["id"], access[1], name, new_email, topic, upload_tuple(upload))
-        except ValueError as exc:
-            st.error(str(exc))
-        except storage.StorageError as exc:
-            st.error(str(exc))
-        except (OSError, sqlite3.Error):
-            st.error("No pudimos guardar los cambios. Intenta de nuevo.")
-        else:
-            st.session_state.guest_access = (guest["id"], access[1], new_email.strip().lower())
-            st.session_state.edited_success = True
-            st.rerun()
+    if existing:
+        submission_confirmation(guest)
+    else:
+        st.info("Tu lugar está confirmado. Tu documento sigue pendiente.")
+        with st.form("edit_guest"):
+            name = st.text_input("Nombre", value=guest["name"], max_chars=80)
+            new_email = st.text_input("Correo", value=guest["email"], max_chars=254)
+            topic = st.text_input("Tema", value=guest["topic"], max_chars=160)
+            upload = st.file_uploader("Entregar mi documento", type=storage.ALLOWED_EXTENSIONS, disabled=datetime.now(storage.TZ) >= storage.DEADLINE)
+            st.warning(SAFETY_PROTOCOL)
+            st.caption("Una sola entrega por correo. Revisa tu documento antes de enviarlo.")
+            save = st.form_submit_button("Guardar expediente", type="primary")
+        if save:
+            try:
+                storage.update(guest["id"], access[1], name, new_email, topic, upload_tuple(upload))
+            except storage.AlreadySubmittedError:
+                st.rerun()
+            except ValueError as exc:
+                st.error(str(exc))
+            except storage.StorageError as exc:
+                st.error(str(exc))
+            except (OSError, sqlite3.Error):
+                st.error("No pudimos guardar los cambios. Intenta de nuevo.")
+            else:
+                st.session_state.guest_access = (guest["id"], access[1], new_email.strip().lower())
+                st.session_state.receipt_email = new_email.strip().lower()
+                st.session_state.receipt = access[1]
+                st.session_state.edited_success = True
+                st.rerun()
     if st.button("Cerrar mi expediente"):
         st.session_state.pop("guest_access", None)
         st.rerun()
@@ -243,7 +279,10 @@ for col, value, label in zip(st.columns(3), [f"{len(rows):02d}", f"{ready:02d}",
         html(f'<div class="stat"><b>{value}</b><span>{label}</span></div>')
 registration, personal, board, info, admin = st.tabs(["01 / Confirmar", "02 / Mi expediente", "03 / Cartelera", "04 / La noche", "⌑ Organizador"])
 with registration:
-    register_form()
+    try:
+        register_form()
+    except storage.StorageError as exc:
+        st.error(str(exc))
 with personal:
     try:
         my_dossier()

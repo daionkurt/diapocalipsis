@@ -1,5 +1,4 @@
 """Supabase REST/Storage backend. Credentials and files stay on the server."""
-from hashlib import sha256
 import json
 from pathlib import Path
 import secrets
@@ -9,7 +8,7 @@ from urllib.request import Request, urlopen
 from uuid import uuid4
 
 from settings import setting
-from storage import StorageError, content_type, CONTENT_TYPES
+from storage import StorageError, content_type, CONTENT_TYPES, make_access_key, key_hash, AlreadySubmittedError
 
 TABLE = "/rest/v1/diapocalipsis_guests"
 LIST_COLUMNS = "id,name,email,topic,created_at,position,presented,filename"
@@ -84,8 +83,10 @@ class SupabaseStore:
         try:
             return self.request(method, TABLE, payload=payload, query=query)
         except RemoteError as exc:
-            if exc.code in {"23505", "23514", "P0001"}:
+            if exc.code in {"23505", "23514", "P0001", "P0002"}:
                 self.discard_rejected_upload(uploaded)
+            if exc.code == "P0002":
+                raise AlreadySubmittedError() from None
             if exc.code == "23505":
                 raise ValueError("Este correo ya tiene un expediente. Usa su clave privada para actualizarlo.") from None
             if exc.code == "P0001":
@@ -93,9 +94,14 @@ class SupabaseStore:
             raise
 
     def register(self, name, email, topic, upload=None):
-        token = secrets.token_urlsafe(32)
+        status = self.registration_status(email)
+        if status["submitted"]:
+            raise AlreadySubmittedError()
+        if status["registered"]:
+            raise ValueError("Este correo ya está registrado. Abre Mi expediente con tu clave para entregar tu documento.")
+        token = make_access_key()
         uploaded = self.upload(*upload) if upload else None
-        payload = {"name": name, "email": email, "topic": topic, "category": "Otro misterio", "token_hash": sha256(token.encode()).hexdigest()}
+        payload = {"name": name, "email": email, "topic": topic, "category": "Otro misterio", "token_hash": key_hash(token)}
         if uploaded:
             payload.update(uploaded)
         try:
@@ -112,24 +118,29 @@ class SupabaseStore:
 
     def lookup(self, email, token):
         rows = self.request("GET", TABLE, query={"select": "*", "email": "eq." + email.strip().lower(), "limit": 1})
-        if rows and secrets.compare_digest(rows[0]["token_hash"], sha256(token.strip().encode()).hexdigest()):
+        if rows and secrets.compare_digest(rows[0]["token_hash"], key_hash(token)):
             return rows[0]
         return None
 
     def update(self, guest_id, token, name, email, topic, upload=None):
-        token_hash = sha256(token.strip().encode()).hexdigest()
-        matches = self.request("GET", TABLE, query={"select": "id", "id": f"eq.{guest_id}", "token_hash": "eq." + token_hash, "limit": 1})
+        token_hash = key_hash(token)
+        matches = self.request("GET", TABLE, query={"select": "id,file_path", "id": f"eq.{guest_id}", "token_hash": "eq." + token_hash, "limit": 1})
         if not matches:
             raise ValueError("La clave de acceso no coincide.")
+        if matches[0].get("file_path"):
+            raise AlreadySubmittedError()
         uploaded = self.upload(*upload) if upload else None
         payload = {"name": name, "email": email, "topic": topic}
         if uploaded:
             payload.update(uploaded)
-        rows = self.write("PATCH", payload, {"id": f"eq.{guest_id}", "token_hash": "eq." + token_hash}, uploaded)
+        rows = self.write("PATCH", payload, {"id": f"eq.{guest_id}", "token_hash": "eq." + token_hash, "file_path": "is.null"}, uploaded)
         if not rows:
             self.discard_rejected_upload(uploaded)
-            raise ValueError("No se encontró el expediente autorizado.")
-        # Replaced files retain private versions; uncertain/concurrent writes cannot destroy evidence.
+            raise AlreadySubmittedError()
+
+    def registration_status(self, email):
+        rows = self.request("GET", TABLE, query={"select": "file_path", "email": "eq." + email.strip().lower(), "limit": 1})
+        return {"registered": bool(rows), "submitted": bool(rows and rows[0].get("file_path"))}
 
     def guests(self):
         rows = []

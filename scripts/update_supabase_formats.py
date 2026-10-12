@@ -17,7 +17,7 @@ def update_formats():
     allowed = bucket.get('allowed_mime_types')
     if allowed is not None:
         supported = sorted(set(allowed) | set(CONTENT_TYPES.values()))
-        store.request('PUT', route, payload={'allowedMimeTypes': supported})
+        store.request('PUT', route, payload={'allowed_mime_types': supported})
     store.check()
     print('Bucket verificado: privado, 50 MB, PDF, KEY, PPTX, DOC, DOCX y TXT permitidos.')
 

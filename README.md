@@ -99,3 +99,9 @@ En **Mi expediente** puedes cambiar **Quiero presentar** y guardar tu selección
 ### Eliminar y volver a entregar un documento
 
 En **Mi expediente → Eliminar mi documento**, confirma el borrado. Se conserva el registro y la clave; se retira el archivo actual y puedes entregar otro antes del cierre. Sigue permitido un solo registro y un solo documento activo por correo. Ejecuta `supabase/remove_evidence.sql` después de `supabase/setup.sql` para habilitarlo. Las acciones muestran un loader y bloquean clics repetidos mientras se procesan. Si Supabase no permite completar la limpieza del objeto privado, la app informa que queda pendiente para el organizador.
+
+### Ruleta de investigaciones
+
+**Investigaciones** elige al azar entre expositores con archivo, excluye a quienes ya salieron y conserva la ronda en Supabase aunque se recargue la app. **Reiniciar toda la ruleta** limpia el sorteo, sin modificar registros ni archivos. Ejecuta `supabase/roulette.sql` al instalar o actualizar. Los invitados sin archivo quedan fuera. La presentación seleccionada se puede descargar cuando el organizador haya iniciado sesión.
+
+El apartado **Organizador** solo aparece en `https://diapocalipsis.streamlit.app/?admin=true`; la URL no sustituye la clave privada.

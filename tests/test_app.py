@@ -239,7 +239,9 @@ class PartyTest(unittest.TestCase):
 
 
     def test_registration_ui_and_admin_privacy(self):
-        app = AppTest.from_file(str(Path(__file__).resolve().parents[1] / "app.py")).run()
+        app = AppTest.from_file(str(Path(__file__).resolve().parents[1] / "app.py"))
+        app.query_params["admin"] = "true"
+        app.run()
         self.assertEqual(len(app.exception), 0)
         self.assertEqual(len(app.selectbox), 0)
         next(c for c in app.checkbox if c.label == "Quiero presentar").check().run()

@@ -9,6 +9,8 @@ import sqlite3
 import streamlit as st
 import storage
 import recovery
+import roulette
+import streamlit.components.v1 as components
 from settings import setting
 from document_preview import show_document
 
@@ -406,6 +408,60 @@ def invitation():
     st.download_button("Guardar los detalles de la noche", details, file_name="diapocalipsis-detalles.txt", mime="text/plain")
 
 
+def investigations(rows, admin_mode):
+    st.subheader("La ruleta de lo inexplicable")
+    st.caption("Que el azar decida qué secreto sale a la luz. Solo participan quienes presentan y ya entregaron su documento.")
+    candidates = roulette.eligible(rows)
+    try:
+        current = roulette.state()
+    except storage.StorageError:
+        st.info("La ruleta está pendiente de configuración. El organizador debe ejecutar supabase/roulette.sql.")
+        return
+    remaining = [r for r in candidates if r["id"] not in current["drawn"]]
+    selected = next((r for r in candidates if r["id"] == current["selected"]), None)
+    animation = st.session_state.pop("roulette_animation", None)
+    display_rows = st.session_state.pop("roulette_previous_options", None) if animation else None
+    components.html(roulette.wheel(display_rows or remaining, animation, bool(animation)), height=445)
+    st.caption(f"{len(remaining)} investigaciones pendientes · {len(current['drawn'])} expedientes sorteados")
+    if remaining:
+        with st.expander("Investigaciones disponibles"):
+            for i, row in enumerate(remaining, 1):
+                st.write(f"{i:02d} · {row['name']} — {row['topic']}")
+    draw_col, reset_col = st.columns(2)
+    if draw_col.button("Iniciar investigaciones 👁", type="primary", disabled=not remaining, width="stretch"):
+        with st.spinner("Eligiendo el próximo secreto…", show_time=True):
+            picked = roulette.draw()
+        if picked is not None:
+            st.session_state.roulette_animation = picked
+            st.session_state.roulette_previous_options = remaining
+        st.rerun()
+    if reset_col.button("Reiniciar toda la ruleta", disabled=not current["drawn"], width="stretch"):
+        roulette.reset()
+        st.session_state.pop("roulette_animation", None)
+        st.session_state.pop("roulette_previous_options", None)
+        st.rerun()
+    if not candidates:
+        st.info("Aún no hay archivos secretos listos para investigar.")
+    elif not remaining:
+        st.success("Todos los secretos salieron a la luz. Reinicia la ruleta para otra ronda.")
+    if selected:
+        st.markdown(f"### Investigador elegido: {escape(selected['name'])}")
+        st.write(f"Tema: {selected['topic']}")
+        st.caption("15 minutos de presentación + 5 minutos de preguntas. Esta presentación ya salió de la ruleta.")
+        if admin_mode and st.session_state.get("admin_authenticated"):
+            file = storage.evidence(selected["id"])
+            if file:
+                st.download_button("Descargar presentación elegida", file[1], file_name=file[0], mime=storage.content_type(file[0]), key=f"roulette_download_{selected['id']}")
+        else:
+            st.caption("El organizador puede descargarla al abrir su acceso privado. El autor también puede abrirla desde Mi expediente.")
+    if current["drawn"]:
+        with st.expander("Investigaciones que ya salieron"):
+            by_id = {r["id"]: r for r in candidates}
+            for i, guest_id in enumerate(current["drawn"], 1):
+                row = by_id.get(guest_id)
+                st.write(f"{i:02d} · {row['name']} — {row['topic']}" if row else f"{i:02d} · Expediente retirado")
+
+
 def organizer(rows):
     password = secret_setting("ADMIN_PASSWORD")
     if not password or password == "replace-with-a-long-private-password":
@@ -496,7 +552,12 @@ ready = sum(bool(r["filename"]) for r in rows)
 for col, value, label in zip(st.columns(3), [f"{len(rows):02d}", f"{ready:02d}", "15 + 5"], ["Testigos confirmados", "Evidencias recibidas", "Minutos por expediente"]):
     with col:
         html(f'<div class="stat"><b>{value}</b><span>{label}</span></div>')
-registration, personal, board, info, admin = st.tabs(["01 / Confirmar", "02 / Mi expediente", "03 / Cartelera", "04 / La noche", "⌑ Organizador"])
+admin_mode = st.query_params.get("admin", "").lower() == "true"
+tab_names = ["01 / Confirmar", "02 / Mi expediente", "03 / Cartelera", "04 / La noche", "05 / Investigaciones"]
+if admin_mode:
+    tab_names.append("⌑ Organizador")
+tabs = st.tabs(tab_names)
+registration, personal, board, info, investigation_tab = tabs[:5]
 with registration:
     try:
         register_form()
@@ -511,9 +572,15 @@ with board:
     lineup(rows)
 with info:
     invitation()
-with admin:
+with investigation_tab:
     try:
-        organizer(rows)
+        investigations(rows, admin_mode)
     except storage.StorageError as exc:
         st.error(str(exc))
+if admin_mode:
+    with tabs[5]:
+        try:
+            organizer(rows)
+        except storage.StorageError as exc:
+            st.error(str(exc))
 html('<div class="footer">◈ &nbsp; PREPARA TUS PRUEBAS. LA VERDAD ESTÁ AHÍ FUERA. &nbsp; ◈</div>')

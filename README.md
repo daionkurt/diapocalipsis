@@ -26,7 +26,7 @@ El panel permite ver correos, descargar presentaciones, cambiar turnos, marcar q
 - Registra nombre, email y tema dentro de un único formulario; el archivo es opcional para confirmar asistencia. Solo se permite un registro por correo, ignorando mayúsculas y espacios al inicio o final.
 - Guarda tu clave corta, con un formato como `luna-ovni-4826`. Usa esa clave y tu correo en **Mi expediente** para consultar tu entrega o completar tus datos antes de entregar. Las claves largas anteriores siguen funcionando. Las claves nuevas aceptan mayúsculas y minúsculas.
 - PDF (`.pdf`), Keynote (`.key`), PowerPoint (`.pptx`), Word (`.doc`/`.docx`) y texto (`.txt`), máximo 50 MB. Si Keynote se guarda como carpeta o en un formato antiguo, expórtalo a PDF.
-- Las cargas cierran el **23 de octubre de 2026 a las 12:00 p.m., zona America/Mexico_City**. Puedes registrarte sin archivo y completar el expediente después; una vez entregado el documento, el expediente queda confirmado y se ocultan los formularios.
+- Las cargas cierran el **23 de octubre de 2026 a las 5:00 p.m.**. Puedes registrarte sin archivo y completar el expediente después; una vez entregado el documento, el expediente queda confirmado y se ocultan los formularios.
 - Solo se acepta **un documento por correo**, incluso si vuelves a abrir la app o intentas cambiar de correo después de la entrega. Al terminar, verás la confirmación y el nombre del archivo en lugar del formulario.
 - El Protocolo de Seguridad aparece únicamente cuando eliges un archivo y confirmas el formulario: debes aceptar su casilla antes de la entrega definitiva. Sin archivo no se muestra.
 - En **Mi expediente** puedes leer tu PDF o TXT y descargar el archivo original. DOCX y PPTX muestran el texto; Keynote muestra su vista previa incluida si existe. Word DOC y las presentaciones completas se abren descargando el archivo. Las vistas no envían documentos a servicios externos.
@@ -63,10 +63,29 @@ Referencias: [API REST de Supabase](https://supabase.com/docs/guides/api), [clav
 
 Supabase es la base predeterminada, también en Streamlit Cloud mediante `st.secrets`. Si faltan claves, la app muestra el error y no cambia automáticamente de base. Para usar el modo local de forma explícita, configura `STORAGE_BACKEND = "sqlite"`. En ese modo la app usa SQLite y guarda registros y archivos en `data/expedientes.sqlite3`, excluido de Git. `DIAPOCALIPSIS_DATA_DIR` permite cambiar la carpeta. Respáldala para conservar todo. No se migran registros locales a Supabase automáticamente.
 
-Las fuentes Bodoni Moda, Cormorant Garamond y DM Sans se cargan desde Google Fonts, con fuentes locales de respaldo si no hay conexión. La invitación está incluida y funciona sin conexión.
+Las fuentes Bodoni Moda, Cormorant Garamond y DM Sans se cargan desde Google Fonts, con fuentes locales de respaldo si no hay conexión. La ilustración original está incluida y funciona sin conexión; la portada muestra su parte artística y los detalles descargables reflejan el horario vigente.
 
 ## Verificación
 
 ```bash
 python3 -m unittest discover -s tests -v
 ```
+
+## Olvidé mi clave
+
+En **Mi expediente → Olvidé mi clave**, el invitado solicita un código y después lo escribe para obtener una nueva clave corta. El código vence en 15 minutos, se usa una vez y se bloquea tras cinco intentos fallidos. Solicitarlo no invalida la clave actual; completar la recuperación sí. El documento y el bloqueo de una entrega por correo se conservan.
+
+Para un proyecto ya creado, ejecuta `supabase/recovery.sql` y `supabase/update_deadline.sql` en SQL Editor. `setup.sql` incluye ambos cambios para proyectos nuevos.
+
+Sin servicio de correo, la solicitud aparece en **Organizador → Recuperación de claves**. El organizador verifica la identidad, genera el código y lo comparte por privado. La app nunca revela la clave por conocer únicamente el email.
+
+Para envío automático con Resend, verifica un dominio remitente y agrega en los secretos de Streamlit Cloud (y localmente si corresponde):
+
+```toml
+RESEND_API_KEY = "re_TU_CLAVE_PRIVADA"
+RESEND_FROM = "Diapocalipsis <expedientes@tu-dominio.com>"
+```
+
+No se necesita SMTP. La API key permanece en el servidor. Mientras estos valores estén vacíos, la recuperación sigue disponible mediante el organizador. Los envíos automáticos se prueban con un transporte simulado; la entrega real requiere configurar Resend.
+
+Referencias: [API de envío de Resend](https://resend.com/docs/api-reference/emails/send-email), [verificación del dominio](https://resend.com/docs/dashboard/domains/introduction).

@@ -13,7 +13,7 @@ from zoneinfo import ZoneInfo
 from settings import setting
 
 TZ = ZoneInfo("America/Mexico_City")
-DEADLINE = datetime(2026, 10, 23, 12, tzinfo=TZ)
+DEADLINE = datetime(2026, 10, 23, 17, tzinfo=TZ)
 EVENT = datetime(2026, 10, 23, 18, 30, tzinfo=TZ)
 MAX_BYTES = 50 * 1024 * 1024
 ALLOWED_EXTENSIONS = ["pdf", "key", "pptx", "doc", "docx", "txt"]
@@ -120,7 +120,7 @@ def validate_fields(name, email, topic):
 
 def validate_evidence(filename, contents, now=None):
     if (now or datetime.now(TZ)) >= DEADLINE:
-        raise ValueError("La recepción de evidencia cerró el 23 de octubre a las 12:00 p.m.")
+        raise ValueError("La recepción de evidencia cerró el 23 de octubre a las 5:00 p.m.")
     if not contents or len(contents) > MAX_BYTES:
         raise ValueError("El archivo debe pesar entre 1 byte y 50 MB.")
     filename = Path(filename.replace("\\", "/")).name

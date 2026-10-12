@@ -8,6 +8,7 @@ import sqlite3
 
 import streamlit as st
 import storage
+import recovery
 from settings import setting
 from document_preview import show_document
 
@@ -130,9 +131,9 @@ def register_form():
         name = left.text_input("Tu nombre", placeholder="¿Quién está detrás de la teoría?", max_chars=80)
         email = right.text_input("Tu correo", placeholder="nombre@correo.com", max_chars=254, key="registration_email")
         topic = st.text_input("El tema de tu presentación", placeholder="Ej. ¿Y si la Luna es una estación espacial?", max_chars=160)
-        upload = st.file_uploader("Tu documento · PDF, KEY, PPTX, Word o TXT", type=storage.ALLOWED_EXTENSIONS, disabled=datetime.now(storage.TZ) >= storage.DEADLINE,
-                                  help="Hasta 50 MB. Un solo documento por correo. Para Keynote usa un archivo .key; si tu Mac lo guarda como carpeta, exporta a PDF.")
-        st.caption("Puedes registrarte ahora y subir tu presentación después con tu clave. Recepción hasta el 23 de octubre de 2026, 12:00 p.m. (Ciudad de México).")
+        upload = st.file_uploader("Tu documento", disabled=datetime.now(storage.TZ) >= storage.DEADLINE,
+                                  help="Hasta 50 MB. Un solo documento por correo.")
+        st.caption("Puedes registrarte ahora y subir tu presentación después con tu clave. Recepción hasta el 23 de octubre de 2026, 5:00 p.m..")
         consent = st.checkbox("Acepto que mi nombre y tema aparezcan en la cartelera; mi correo y archivo serán visibles para el organizador.")
         submitted = st.form_submit_button("Confirmar mi asistencia  →", type="primary", width="stretch")
     if submitted:
@@ -165,8 +166,79 @@ def register_form():
             st.rerun()
 
 
+def forgot_key():
+    with st.expander("Olvidé mi clave"):
+        st.caption("Recupera el acceso con un código de un solo uso. Tu documento se conserva.")
+        with st.form("recovery_request"):
+            email = st.text_input("Correo para recuperar el expediente", max_chars=254)
+            requested = st.form_submit_button("Solicitar código de recuperación")
+        if requested:
+            try:
+                automatic = recovery.request_recovery(email)
+            except (ValueError, storage.StorageError) as exc:
+                st.error(str(exc))
+            else:
+                if automatic:
+                    st.info("Si el correo está registrado, recibirás un código. Si ya solicitaste uno recientemente, usa el último; vence en 15 minutos.")
+                else:
+                    st.info("Si el correo está registrado, tu solicitud quedó en el panel del organizador. Pídele tu código por privado y escríbelo aquí.")
+        with st.form("recovery_finish"):
+            recovery_email = st.text_input("Correo de tu expediente", max_chars=254)
+            code = st.text_input("Código de recuperación", max_chars=8, placeholder="Código de 8 dígitos")
+            confirmed = st.form_submit_button("Recuperar mi clave", type="primary")
+        if confirmed:
+            try:
+                new_key = recovery.finish(recovery_email, code)
+                st.session_state.recovered_key = new_key
+                st.session_state.receipt = new_key
+                st.session_state.receipt_email = recovery_email.strip().lower()
+                guest = storage.lookup(recovery_email, new_key)
+            except (ValueError, storage.StorageError) as exc:
+                st.error(str(exc))
+                if st.session_state.get("recovered_key"):
+                    st.code(st.session_state.recovered_key, language=None)
+            else:
+                if not guest:
+                    st.warning("Tu clave se recuperó. Guarda la nueva clave y úsala para abrir tu expediente.")
+                    st.code(new_key, language=None)
+                    return
+                st.session_state.recovered_key = new_key
+                st.session_state.receipt = new_key
+                st.session_state.receipt_email = guest["email"]
+                st.session_state.guest_access = (guest["id"], new_key, guest["email"])
+                st.rerun()
+
+
+def organizer_recoveries():
+    with st.expander("Recuperación de claves"):
+        st.caption("Confirma que hablas con el titular del correo antes de compartirle un código por privado. Vence en 15 minutos y se usa una sola vez.")
+        try:
+            requests = recovery.pending_requests()
+        except storage.StorageError:
+            st.info("Para activar la recuperación, ejecuta supabase/recovery.sql en SQL Editor.")
+            return
+        if not requests:
+            st.caption("No hay solicitudes de recuperación pendientes.")
+        for request in requests:
+            st.write(f'{request["name"]} · {request["email"]}')
+            if st.button("Generar código de recuperación", key=f'recovery_issue_{request["guest_id"]}'):
+                try:
+                    code = recovery.organizer_code(request["email"])
+                except (ValueError, storage.StorageError) as exc:
+                    st.error(str(exc))
+                else:
+                    st.session_state.organizer_recovery_code = (request["email"], code)
+            issued = st.session_state.get("organizer_recovery_code")
+            if issued and issued[0] == request["email"]:
+                st.code(issued[1], language=None)
+                st.caption("Compártelo directamente con esta persona; no lo publiques en la cartelera.")
+
+
 def my_dossier():
     st.subheader("Tu evidencia, bajo llave")
+    if st.session_state.get("recovered_key"):
+        st.success("Acceso recuperado. Guarda tu nueva clave; la anterior dejó de funcionar.")
+        st.code(st.session_state.recovered_key, language=None)
     pending = st.session_state.get("pending_document")
     if pending and pending["action"] == "update":
         review_document(pending)
@@ -186,7 +258,8 @@ def my_dossier():
                 st.session_state.guest_access = (guest["id"], token, email.strip().lower())
                 st.rerun()
             else:
-                st.error("Correo o clave incorrectos. Si perdiste tu clave, contacta a Alejandro.")
+                st.error("Correo o clave incorrectos. Puedes recuperar tu acceso en Olvidé mi clave.")
+        forgot_key()
         return
     guest = storage.lookup(access[2], access[1])
     if not guest:
@@ -204,7 +277,7 @@ def my_dossier():
             name = st.text_input("Nombre", value=guest["name"], max_chars=80)
             new_email = st.text_input("Correo", value=guest["email"], max_chars=254)
             topic = st.text_input("Tema", value=guest["topic"], max_chars=160)
-            upload = st.file_uploader("Entregar mi documento", type=storage.ALLOWED_EXTENSIONS, disabled=datetime.now(storage.TZ) >= storage.DEADLINE)
+            upload = st.file_uploader("Entregar mi documento", disabled=datetime.now(storage.TZ) >= storage.DEADLINE)
             st.caption("Una sola entrega por correo. Revisa tu documento antes de enviarlo.")
             save = st.form_submit_button("Guardar expediente", type="primary")
         if save:
@@ -229,7 +302,8 @@ def my_dossier():
                 st.session_state.edited_success = True
                 st.rerun()
     if st.button("Cerrar mi expediente"):
-        st.session_state.pop("guest_access", None)
+        for key in ("guest_access", "recovered_key", "receipt", "receipt_email"):
+            st.session_state.pop(key, None)
         st.rerun()
 
 
@@ -252,7 +326,7 @@ def invitation():
         ("◴", "La dinámica", "20 minutos exactos para exponer.<br>5 a 10 minutos de debate y preguntas."),
         ("♧", "Menú del terror", "Bebidas, botana y cena terroríficas para sobrevivir a la noche."),
         ("♜", "El outfit", "Un look relacionado a tu tema o a tu película de terror favorita. Un sombrero o gorro de aluminio también cuenta."),
-        ("✉", "Recepción de evidencia", "PDF, Keynote, PowerPoint (.pptx), Word (.doc/.docx) o TXT, a más tardar el viernes 23 a las 12:00 p.m. Sube tu archivo aquí o envíalo a alejandrofls@icloud.com."),
+        ("✉", "Recepción de evidencia", "Tu documento, a más tardar el viernes 23 a las 5:00 p.m. Sube tu archivo aquí o envíalo a alejandrofls@icloud.com."),
     ]
     for start in (0, 3):
         columns = st.columns(3)
@@ -261,7 +335,8 @@ def invitation():
                 html(f'<div class="info-card"><div class="symbol">{symbol}</div><h3>{title}</h3><p>{description}</p></div>')
     st.link_button("Abrir correo de Alejandro", "mailto:alejandrofls@icloud.com")
     st.caption("Las cargas de esta app se guardan para el organizador; no se envían automáticamente por correo.")
-    st.download_button("Guardar la invitación", (ROOT / "assets/invitacion.png").read_bytes(), file_name="diapocalipsis-invitacion.png", mime="image/png")
+    details = "DIAPOCALIPSIS\nViernes 23 de octubre de 2026, desde las 6:30 p.m.\nAv. Guadalupe #5511, Int. B15.\nRecepción de documentos hasta las 5:00 p.m. del viernes 23.\n20 minutos de presentación + 5 a 10 minutos de debate.\nBebidas, botana y cena. Ven con un look o accesorio relacionado con tu tema.\nContacto: alejandrofls@icloud.com\n"
+    st.download_button("Guardar los detalles de la noche", details, file_name="diapocalipsis-detalles.txt", mime="text/plain")
 
 
 def organizer(rows):
@@ -285,7 +360,9 @@ def organizer(rows):
     st.subheader("Control de la noche")
     if st.button("Cerrar sesión del organizador"):
         st.session_state.admin_authenticated = False
+        st.session_state.pop("organizer_recovery_code", None)
         st.rerun()
+    organizer_recoveries()
     if not rows:
         st.info("Los registros aparecerán aquí cuando alguien confirme su asistencia.")
         return
@@ -329,7 +406,8 @@ with left:
     else:
         st.caption("TE LO ADVERTIMOS: DESPUÉS DE ESTA NOCHE, NADA SERÁ IGUAL.")
 with right:
-    st.image(str(ROOT / "assets/invitacion.png"), width=300)
+    with st.container(key="poster"):
+        st.image(str(ROOT / "assets/invitacion.png"), width=300)
 
 try:
     rows = storage.guests()

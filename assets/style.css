@@ -39,3 +39,7 @@ p,li,label,[data-testid="stCaptionContainer"] {font-family:'DM Sans',sans-serif;
 @media(max-width:640px) {.block-container{padding:2rem 1.5rem;} .hero-title{font-size:42px;} .topline{letter-spacing:1px;font-size:9px;} [data-baseweb="tab-list"]{gap:10px;} [data-baseweb="tab"]{font-size:12px;} [data-testid="stForm"]{padding:18px;} }
 
 [data-baseweb="tab"][aria-selected="true"] {color:#d4867b;}
+
+/* Keep the original artwork while hiding its superseded logistics. */
+.st-key-poster [data-testid="stImage"] img {height:265px;object-fit:cover;object-position:top;}
+.st-key-poster [data-testid="stImage"] button {display:none;}

@@ -43,3 +43,6 @@ p,li,label,[data-testid="stCaptionContainer"] {font-family:'DM Sans',sans-serif;
 /* Keep the complete invitation at its original aspect ratio. */
 .st-key-poster {max-width:300px;}
 .st-key-poster [data-testid="stImage"] img {width:100%;height:auto;}
+
+/* Hide Streamlit keyboard hints that overlap text in compact input fields. */
+[data-testid="InputInstructions"] {display:none!important;}

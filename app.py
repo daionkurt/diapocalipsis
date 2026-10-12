@@ -55,7 +55,67 @@ def submission_confirmation(guest, token=None):
         st.download_button("Guardar mi clave", f"DIAPOCALIPSIS · Clave privada\n{token}\n\nUsa tu correo y esta clave en Mi expediente.\n", file_name="mi-clave-diapocalipsis.txt", mime="text/plain")
 
 
+def existing_registration(email):
+    status = storage.registration_status(email)
+    if status["submitted"]:
+        st.success("Este correo ya subió un documento. Tu evidencia ya está recibida.")
+        st.caption("Aceptamos un solo documento por correo. Puedes consultar el expediente con tu clave en Mi expediente.")
+    else:
+        st.info("Este correo ya está registrado. Abre Mi expediente con tu clave para entregar tu documento pendiente.")
+    if st.button("Usar otro correo"):
+        st.session_state.pop("blocked_email", None)
+        st.session_state.pop("registration_email", None)
+        st.rerun()
+
+
+def review_document(pending):
+    st.subheader("Confirma tu documento")
+    st.write(f'Archivo: {pending["upload"][0]}')
+    st.caption("Una sola entrega por correo. Revisa el archivo antes de enviarlo.")
+    with st.form("review_" + pending["action"]):
+        st.warning(SAFETY_PROTOCOL)
+        accepted = st.checkbox("Leí y acepto el Protocolo de Seguridad.")
+        confirm = st.form_submit_button("Enviar mi documento", type="primary", width="stretch")
+    if st.button("Volver al formulario", key="cancel_" + pending["action"]):
+        st.session_state.pop("pending_document", None)
+        st.rerun()
+    if not confirm:
+        return
+    if not accepted:
+        st.error("Acepta el Protocolo de Seguridad para entregar tu documento.")
+        return
+    try:
+        if pending["action"] == "register":
+            token = storage.register(pending["name"], pending["email"], pending["topic"], pending["upload"])
+        else:
+            token = pending["token"]
+            storage.update(pending["id"], token, pending["name"], pending["email"], pending["topic"], pending["upload"])
+    except (storage.AlreadySubmittedError, storage.AlreadyRegisteredError):
+        st.session_state.pop("pending_document", None)
+        if pending["action"] == "register":
+            st.session_state.blocked_email = pending["email"]
+        st.rerun()
+    except (ValueError, storage.StorageError) as exc:
+        st.error(str(exc))
+    except (OSError, sqlite3.Error):
+        st.error("No pudimos guardar tu documento. Intenta de nuevo.")
+    else:
+        st.session_state.pop("pending_document", None)
+        st.session_state.receipt = token
+        st.session_state.receipt_email = pending["email"]
+        if pending["action"] == "update":
+            st.session_state.guest_access = (pending["id"], token, pending["email"])
+        st.rerun()
+
+
 def register_form():
+    pending = st.session_state.get("pending_document")
+    if pending and pending["action"] == "register":
+        review_document(pending)
+        return
+    if st.session_state.get("blocked_email"):
+        existing_registration(st.session_state.blocked_email)
+        return
     receipt_email = st.session_state.get("receipt_email")
     token = st.session_state.get("receipt")
     if receipt_email and token:
@@ -69,47 +129,52 @@ def register_form():
             return
     st.subheader("Abre tu expediente")
     html('<div class="section-note">Toda teoría necesita un testigo. Confirma tu asistencia y cuéntanos qué vas a revelar.</div>')
-    email = st.text_input("Tu correo", placeholder="nombre@correo.com", max_chars=254, key="registration_email")
-    if "@" in email and "." in email.rsplit("@", 1)[-1]:
-        status = storage.registration_status(email)
-        if status["submitted"]:
-            st.success("Este correo ya subió un documento. Tu evidencia ya está recibida.")
-            st.caption("Aceptamos un solo documento por correo. Puedes consultar el expediente con tu clave en Mi expediente.")
-            return
-        if status["registered"]:
-            st.info("Este correo ya está registrado. Abre Mi expediente con tu clave para entregar tu documento pendiente.")
-            return
     with st.form("registration", clear_on_submit=False):
-        name = st.text_input("Tu nombre", placeholder="¿Quién está detrás de la teoría?", max_chars=80)
+        left, right = st.columns(2)
+        name = left.text_input("Tu nombre", placeholder="¿Quién está detrás de la teoría?", max_chars=80)
+        email = right.text_input("Tu correo", placeholder="nombre@correo.com", max_chars=254, key="registration_email")
         topic = st.text_input("El tema de tu presentación", placeholder="Ej. ¿Y si la Luna es una estación espacial?", max_chars=160)
         upload = st.file_uploader("Tu documento · PDF, KEY, PPTX, Word o TXT", type=storage.ALLOWED_EXTENSIONS, disabled=datetime.now(storage.TZ) >= storage.DEADLINE,
                                   help="Hasta 50 MB. Un solo documento por correo. Para Keynote usa un archivo .key; si tu Mac lo guarda como carpeta, exporta a PDF.")
-        st.warning(SAFETY_PROTOCOL)
         st.caption("Puedes registrarte ahora y subir tu presentación después con tu clave. Recepción hasta el 23 de octubre de 2026, 12:00 p.m. (Ciudad de México).")
         consent = st.checkbox("Acepto que mi nombre y tema aparezcan en la cartelera; mi correo y archivo serán visibles para el organizador.")
         submitted = st.form_submit_button("Confirmar mi asistencia  →", type="primary", width="stretch")
     if submitted:
-        if not consent:
-            st.error("Confirma que aceptas aparecer en la cartelera para abrir tu expediente.")
-            return
         try:
-            token = storage.register(name, email, topic, upload_tuple(upload))
-        except storage.AlreadySubmittedError:
+            email = storage.normalize_email(email)
+            status = storage.registration_status(email)
+            if status["registered"]:
+                st.session_state.blocked_email = email
+                st.rerun()
+            if not consent:
+                st.error("Confirma que aceptas aparecer en la cartelera para abrir tu expediente.")
+                return
+            name, email, topic = storage.validate_fields(name, email, topic)
+            evidence = upload_tuple(upload)
+            if evidence:
+                storage.validate_evidence(*evidence)
+                st.session_state.pending_document = {"action": "register", "name": name, "email": email, "topic": topic, "upload": evidence}
+                st.rerun()
+            token = storage.register(name, email, topic)
+        except (storage.AlreadySubmittedError, storage.AlreadyRegisteredError):
+            st.session_state.blocked_email = email
             st.rerun()
-        except ValueError as exc:
-            st.error(str(exc))
-        except storage.StorageError as exc:
+        except (ValueError, storage.StorageError) as exc:
             st.error(str(exc))
         except (OSError, sqlite3.Error):
             st.error("No pudimos guardar el expediente. Intenta de nuevo o contacta al organizador.")
         else:
             st.session_state.receipt = token
-            st.session_state.receipt_email = email.strip().lower()
+            st.session_state.receipt_email = email
             st.rerun()
 
 
 def my_dossier():
     st.subheader("Tu evidencia, bajo llave")
+    pending = st.session_state.get("pending_document")
+    if pending and pending["action"] == "update":
+        review_document(pending)
+        return
     if st.session_state.pop("edited_success", False):
         st.success("Expediente actualizado.")
     access = st.session_state.get("guest_access")
@@ -141,23 +206,26 @@ def my_dossier():
             new_email = st.text_input("Correo", value=guest["email"], max_chars=254)
             topic = st.text_input("Tema", value=guest["topic"], max_chars=160)
             upload = st.file_uploader("Entregar mi documento", type=storage.ALLOWED_EXTENSIONS, disabled=datetime.now(storage.TZ) >= storage.DEADLINE)
-            st.warning(SAFETY_PROTOCOL)
             st.caption("Una sola entrega por correo. Revisa tu documento antes de enviarlo.")
             save = st.form_submit_button("Guardar expediente", type="primary")
         if save:
             try:
-                storage.update(guest["id"], access[1], name, new_email, topic, upload_tuple(upload))
+                name, new_email, topic = storage.validate_fields(name, new_email, topic)
+                evidence = upload_tuple(upload)
+                if evidence:
+                    storage.validate_evidence(*evidence)
+                    st.session_state.pending_document = {"action": "update", "id": guest["id"], "token": access[1], "name": name, "email": new_email, "topic": topic, "upload": evidence}
+                    st.rerun()
+                storage.update(guest["id"], access[1], name, new_email, topic)
             except storage.AlreadySubmittedError:
                 st.rerun()
-            except ValueError as exc:
-                st.error(str(exc))
-            except storage.StorageError as exc:
+            except (ValueError, storage.StorageError) as exc:
                 st.error(str(exc))
             except (OSError, sqlite3.Error):
                 st.error("No pudimos guardar los cambios. Intenta de nuevo.")
             else:
-                st.session_state.guest_access = (guest["id"], access[1], new_email.strip().lower())
-                st.session_state.receipt_email = new_email.strip().lower()
+                st.session_state.guest_access = (guest["id"], access[1], new_email)
+                st.session_state.receipt_email = new_email
                 st.session_state.receipt = access[1]
                 st.session_state.edited_success = True
                 st.rerun()

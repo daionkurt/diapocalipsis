@@ -101,6 +101,34 @@ class PartyTest(unittest.TestCase):
         self.assertEqual(storage.evidence(1), ("primero.txt", b"Original"))
         self.assertEqual(storage.guests()[0]["email"], "ana@example.com")
 
+    def test_pending_registration_cannot_be_registered_again(self):
+        storage.register("Ana", "ana@example.com", "La Luna")
+        with self.assertRaises(storage.AlreadyRegisteredError):
+            storage.register("Otra Ana", " ANA@example.com ", "Otro tema", ("nuevo.txt", b"Nuevo"), now=BEFORE)
+        self.assertEqual(len(storage.guests()), 1)
+        self.assertIsNone(storage.evidence(1))
+
+    def test_security_protocol_only_appears_for_a_pending_file(self):
+        path = str(Path(__file__).resolve().parents[1] / "app.py")
+        app = AppTest.from_file(path).run()
+        self.assertFalse(any("Protocolo de Seguridad" in item.value for item in app.warning))
+        self.assertFalse(any("Protocolo de Seguridad" in c.label for c in app.checkbox))
+        app.session_state["pending_document"] = {
+            "action": "register", "name": "Ana", "email": "ana@example.com", "topic": "La Luna",
+            "upload": ("pruebas.txt", b"Evidencia"),
+        }
+        app.run()
+        self.assertFalse(app.exception)
+        self.assertTrue(any("Protocolo de Seguridad" in item.value for item in app.warning))
+        next(b for b in app.button if b.label == "Enviar mi documento").click().run()
+        self.assertEqual(storage.guests(), [])
+        next(c for c in app.checkbox if "Protocolo de Seguridad" in c.label).check()
+        next(b for b in app.button if b.label == "Enviar mi documento").click().run()
+        self.assertFalse(app.exception)
+        self.assertEqual(storage.evidence(1), ("pruebas.txt", b"Evidencia"))
+        self.assertEqual(len(app.get("file_uploader")), 0)
+        self.assertTrue(any("Ya subiste" in item.value for item in app.success))
+
     def test_simultaneous_submissions_only_accept_one(self):
         token = storage.register("Ana", "ana@example.com", "La Luna")
         def submit(index):
@@ -126,7 +154,8 @@ class PartyTest(unittest.TestCase):
         self.assertTrue(any("Ya subiste" in s.value for s in app.success))
         self.assertTrue(any("pruebas.txt" in m.value for m in app.markdown))
         fresh = AppTest.from_file(path).run()
-        next(t for t in fresh.text_input if t.label == "Tu correo").set_value("ANA@example.com").run()
+        next(t for t in fresh.text_input if t.label == "Tu correo").set_value("ANA@example.com")
+        next(b for b in fresh.button if b.label.startswith("Confirmar mi asistencia")).click().run()
         self.assertFalse(fresh.exception)
         self.assertEqual(len(fresh.get("file_uploader")), 0)
         self.assertTrue(any("ya subió" in s.value for s in fresh.success))

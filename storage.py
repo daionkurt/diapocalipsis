@@ -62,6 +62,11 @@ class AlreadySubmittedError(ValueError):
         super().__init__("Este correo ya subió un documento. Tu evidencia ya está recibida; no puedes subir otra.")
 
 
+class AlreadyRegisteredError(ValueError):
+    def __init__(self):
+        super().__init__("Este correo ya está registrado. Abre Mi expediente con tu clave para completar tu entrega.")
+
+
 def remote_store():
     if setting("SUPABASE_URL") or setting("SUPABASE_SECRET_KEY"):
         from supabase_store import SupabaseStore
@@ -94,12 +99,17 @@ def connect():
     return conn
 
 
-def validate_fields(name, email, topic):
-    name, email, topic = name.strip(), email.strip().lower(), topic.strip()
-    if not 2 <= len(name) <= 80:
-        raise ValueError("Escribe tu nombre (entre 2 y 80 caracteres).")
+def normalize_email(email):
+    email = email.strip().lower()
     if len(email) > 254 or not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
         raise ValueError("Escribe un correo válido para tu expediente.")
+    return email
+
+
+def validate_fields(name, email, topic):
+    name, email, topic = name.strip(), normalize_email(email), topic.strip()
+    if not 2 <= len(name) <= 80:
+        raise ValueError("Escribe tu nombre (entre 2 y 80 caracteres).")
     if not 3 <= len(topic) <= 160:
         raise ValueError("Escribe tu tema (entre 3 y 160 caracteres).")
     return name, email, topic
@@ -158,6 +168,8 @@ def register(name, email, topic, upload=None, now=None):
         existing = conn.execute("SELECT e.guest_id FROM guests g LEFT JOIN evidence e ON e.guest_id=g.id WHERE g.email=?", (email,)).fetchone()
         if existing and existing[0] is not None:
             raise AlreadySubmittedError()
+        if existing:
+            raise AlreadyRegisteredError()
         position = conn.execute("SELECT COALESCE(MAX(position), 0)+1 FROM guests").fetchone()[0]
         try:
             cur = conn.execute(
@@ -165,7 +177,7 @@ def register(name, email, topic, upload=None, now=None):
                 (name, email, topic, "Otro misterio", key_hash(token), datetime.now(TZ).isoformat(), position),
             )
         except sqlite3.IntegrityError:
-            raise ValueError("Este correo ya tiene un expediente. Usa tu clave en ‘Mi expediente’ para actualizarlo.") from None
+            raise AlreadyRegisteredError() from None
         if upload:
             conn.execute("INSERT INTO evidence VALUES(?,?,?,?)", (cur.lastrowid, filename, upload[1], datetime.now(TZ).isoformat()))
     return token

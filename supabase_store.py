@@ -8,7 +8,7 @@ from urllib.request import Request, urlopen
 from uuid import uuid4
 
 from settings import setting
-from storage import StorageError, content_type, CONTENT_TYPES, make_access_key, key_hash, AlreadySubmittedError
+from storage import StorageError, content_type, CONTENT_TYPES, make_access_key, key_hash, AlreadySubmittedError, AlreadyRegisteredError
 
 TABLE = "/rest/v1/diapocalipsis_guests"
 LIST_COLUMNS = "id,name,email,topic,created_at,position,presented,filename"
@@ -88,7 +88,7 @@ class SupabaseStore:
             if exc.code == "P0002":
                 raise AlreadySubmittedError() from None
             if exc.code == "23505":
-                raise ValueError("Este correo ya tiene un expediente. Usa su clave privada para actualizarlo.") from None
+                raise AlreadyRegisteredError() from None
             if exc.code == "P0001":
                 raise ValueError("No se aceptó el archivo: la recepción cerró o la evidencia no está disponible en el bucket privado.") from None
             raise
@@ -98,7 +98,7 @@ class SupabaseStore:
         if status["submitted"]:
             raise AlreadySubmittedError()
         if status["registered"]:
-            raise ValueError("Este correo ya está registrado. Abre Mi expediente con tu clave para entregar tu documento.")
+            raise AlreadyRegisteredError()
         token = make_access_key()
         uploaded = self.upload(*upload) if upload else None
         payload = {"name": name, "email": email, "topic": topic, "category": "Otro misterio", "token_hash": key_hash(token)}

@@ -93,6 +93,14 @@ class SupabaseTest(unittest.TestCase):
             self.store.register('Ana', 'ana@example.com', 'La Luna', ('nuevo.txt', b'New'))
         self.store.upload.assert_not_called()
 
+    def test_registered_email_without_file_cannot_create_another_record(self):
+        self.store.request = Mock(return_value=[{'file_path': None}])
+        self.store.upload = Mock()
+        with self.assertRaises(storage.AlreadyRegisteredError):
+            self.store.register('Ana', 'ana@example.com', 'La Luna', ('nuevo.txt', b'New'))
+        self.store.upload.assert_not_called()
+        self.assertEqual(self.store.request.call_count, 1)
+
     def test_existing_file_is_blocked_even_with_valid_key(self):
         self.store.request = Mock(return_value=[{'id': 7, 'file_path': 'original.txt'}])
         self.store.upload = Mock()

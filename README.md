@@ -95,3 +95,7 @@ Referencias: [API de envío de Resend](https://resend.com/docs/api-reference/ema
 El checkbox **Quiero presentar** muestra tema y documento al activarse. Sin marcarlo, nombre y correo bastan para confirmar asistencia: no se pide evidencia y no se asigna turno de exposición. En proyectos existentes, ejecuta `supabase/attendance.sql` antes de desplegar; los registros anteriores conservan su condición de expositores.
 
 En **Mi expediente** puedes cambiar **Quiero presentar** y guardar tu selección. Al activarlo se muestran tema y documento. Si ya entregaste evidencia, puedes cambiar tu participación y seguir consultando el archivo; se conserva el límite de una entrega por correo.
+
+### Eliminar y volver a entregar un documento
+
+En **Mi expediente → Eliminar mi documento**, confirma el borrado. Se conserva el registro y la clave; se retira el archivo actual y puedes entregar otro antes del cierre. Sigue permitido un solo registro y un solo documento activo por correo. Ejecuta `supabase/remove_evidence.sql` después de `supabase/setup.sql` para habilitarlo. Las acciones muestran un loader y bloquean clics repetidos mientras se procesan. Si Supabase no permite completar la limpieza del objeto privado, la app informa que queda pendiente para el organizador.

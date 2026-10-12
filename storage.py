@@ -233,6 +233,20 @@ def update(guest_id, token, name, email, topic, upload=None, now=None, presentin
             conn.execute("INSERT INTO evidence VALUES(?,?,?,?)", (guest_id, filename, upload[1], datetime.now(TZ).isoformat()))
 
 
+def remove_evidence(guest_id, token):
+    """Remove only the authenticated guest's current evidence, retaining registration."""
+    remote = remote_store()
+    if remote:
+        return remote.remove_evidence(guest_id, token)
+    with closing(connect()) as conn, conn:
+        conn.execute("BEGIN IMMEDIATE")
+        guest = conn.execute("SELECT token_hash FROM guests WHERE id=?", (guest_id,)).fetchone()
+        if not guest or not secrets.compare_digest(guest[0], key_hash(token)):
+            raise ValueError("La clave de acceso no coincide.")
+        conn.execute("DELETE FROM evidence WHERE guest_id=?", (guest_id,))
+    return True
+
+
 def set_presenting(guest_id, token, presenting):
     """Change participation without replacing submitted evidence or contact details."""
     remote = remote_store()

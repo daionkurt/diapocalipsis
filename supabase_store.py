@@ -145,6 +145,32 @@ class SupabaseStore:
             self.discard_rejected_upload(uploaded)
             raise AlreadySubmittedError()
 
+    def remove_evidence(self, guest_id, token):
+        filters = {"id": f"eq.{guest_id}", "token_hash": "eq." + key_hash(token)}
+        matches = self.request("GET", TABLE, query={**filters, "select": "file_path,file_bucket", "limit": 1})
+        if not matches:
+            raise ValueError("La clave de acceso no coincide.")
+        old = matches[0]
+        if not old.get("file_path"):
+            return True
+        # Compare the exact path so a concurrent replacement can never be removed.
+        rows = self.request("PATCH", TABLE, query={**filters, "file_path": "eq." + old["file_path"]},
+                            payload={"filename": None, "file_path": None, "file_bucket": None})
+        if not rows:
+            raise ValueError("El documento cambió. Recarga tu expediente antes de eliminarlo.")
+        for attempt in range(3):
+            try:
+                self.request("DELETE", "/storage/v1/object/" + quote(old["file_bucket"], safe=""),
+                             payload={"prefixes": [old["file_path"]]})
+                return True
+            except RemoteError as exc:
+                if exc.status == 404:
+                    return True
+            except StorageError:
+                pass
+        # The dossier is cleared, but be explicit if object cleanup could not complete.
+        return False
+
     def set_presenting(self, guest_id, token, presenting):
         rows = self.request("PATCH", TABLE, query={"id": f"eq.{guest_id}", "token_hash": "eq." + key_hash(token)},
                             payload={"is_presenter": bool(presenting)})

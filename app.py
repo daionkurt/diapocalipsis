@@ -41,7 +41,7 @@ def submission_confirmation(guest, token=None):
     if filename:
         st.success("Ya subiste tu documento. Tu evidencia está recibida.")
         st.write(f"Archivo: {filename}")
-        st.caption("Aceptamos un solo documento por correo. No necesitas volver a enviarlo.")
+        st.caption("Solo puede haber un documento activo por correo. Puedes eliminarlo desde Mi expediente para subir otro.")
     elif not storage.is_presenter(guest):
         st.success("¡Asistencia confirmada! Nos vemos en el Diapocalipsis.")
         st.caption("Vienes como invitado. No necesitas subir un documento.")
@@ -60,7 +60,7 @@ def existing_registration(email):
     status = storage.registration_status(email)
     if status["submitted"]:
         st.success("Este correo ya subió un documento. Tu evidencia ya está recibida.")
-        st.caption("Aceptamos un solo documento por correo. Puedes consultar el expediente con tu clave en Mi expediente.")
+        st.caption("Solo puede haber un documento activo por correo. Abre Mi expediente con tu clave para consultarlo o eliminarlo.")
     else:
         st.info("Este correo ya confirmó su asistencia. Puedes consultar tu expediente con tu clave.")
     if st.button("Usar otro correo"):
@@ -73,7 +73,7 @@ def review_document(pending):
     st.subheader("Confirma tu documento")
     st.write(f'Archivo: {pending["upload"][0]}')
     st.caption("Una sola entrega por correo. Revisa el archivo antes de enviarlo.")
-    with st.form("review_" + pending["action"]):
+    with st.form("review_" + pending["action"], enter_to_submit=False):
         st.warning(SAFETY_PROTOCOL)
         accepted = st.checkbox("Leí y acepto el Protocolo de Seguridad.")
         confirm = st.form_submit_button("Enviar mi documento", type="primary", width="stretch")
@@ -87,10 +87,12 @@ def review_document(pending):
         return
     try:
         if pending["action"] == "register":
-            token = storage.register(pending["name"], pending["email"], pending["topic"], pending["upload"], presenting=pending.get("presenting", True))
+            with st.spinner("Registrando y subiendo tu archivo secreto…", show_time=True):
+                token = storage.register(pending["name"], pending["email"], pending["topic"], pending["upload"], presenting=pending.get("presenting", True))
         else:
             token = pending["token"]
-            storage.update(pending["id"], token, pending["name"], pending["email"], pending["topic"], pending["upload"], presenting=pending.get("presenting", True))
+            with st.spinner("Subiendo tu archivo secreto…", show_time=True):
+                storage.update(pending["id"], token, pending["name"], pending["email"], pending["topic"], pending["upload"], presenting=pending.get("presenting", True))
     except (storage.AlreadySubmittedError, storage.AlreadyRegisteredError):
         st.session_state.pop("pending_document", None)
         if pending["action"] == "register":
@@ -219,6 +221,29 @@ def forgot_key():
                 st.rerun()
 
 
+def remove_document(guest, token, filename):
+    if st.button("Eliminar mi documento", key=f'remove_file_{guest["id"]}'):
+        st.session_state.remove_document_id = guest["id"]
+    if st.session_state.get("remove_document_id") != guest["id"]:
+        return
+    st.warning(f'¿Eliminar {filename}? Tu asistencia y clave se conservan. Podrás subir otro documento antes del cierre. Esta acción no se puede deshacer.')
+    confirm, cancel = st.columns(2)
+    if cancel.button("Conservar mi documento"):
+        st.session_state.pop("remove_document_id", None)
+        st.rerun()
+    if confirm.button("Sí, eliminar documento", type="primary"):
+        try:
+            with st.spinner("Eliminando tu documento…", show_time=True):
+                cleaned = storage.remove_evidence(guest["id"], token)
+        except (ValueError, storage.StorageError, OSError, sqlite3.Error) as exc:
+            st.error(str(exc))
+        else:
+            st.session_state.pop("remove_document_id", None)
+            st.session_state.pop("pending_document", None)
+            st.session_state.removed_document = cleaned
+            st.rerun()
+
+
 def organizer_recoveries():
     with st.expander("Recuperación de claves"):
         st.caption("Confirma que hablas con el titular del correo antes de compartirle un código por privado. Vence en 15 minutos y se usa una sola vez.")
@@ -253,6 +278,11 @@ def my_dossier():
     if pending and pending["action"] == "update":
         review_document(pending)
         return
+    removed = st.session_state.pop("removed_document", None)
+    if removed is True:
+        st.success("Documento eliminado. El expediente queda listo para recibir tu nuevo archivo secreto.")
+    elif removed is False:
+        st.warning("El documento ya se retiró de tu expediente. No pudimos completar su borrado del almacenamiento; avisa al organizador para terminar la limpieza.")
     if st.session_state.pop("edited_success", False):
         st.success("Expediente actualizado.")
     access = st.session_state.get("guest_access")
@@ -285,7 +315,8 @@ def my_dossier():
     if existing:
         if presenting != storage.is_presenter(guest) and st.button("Guardar mi selección", type="primary"):
             try:
-                storage.set_presenting(guest["id"], access[1], presenting)
+                with st.spinner("Guardando tu selección…", show_time=True):
+                    storage.set_presenting(guest["id"], access[1], presenting)
             except (ValueError, storage.StorageError) as exc:
                 st.error(str(exc))
             else:
@@ -295,13 +326,14 @@ def my_dossier():
         file = storage.evidence(guest["id"])
         if file:
             show_document(file[0], file[1], guest["id"])
+        remove_document(guest, access[1], existing)
     else:
         if presenting == storage.is_presenter(guest):
             if presenting:
                 st.info("Tu lugar está confirmado. Tu documento sigue pendiente.")
             else:
                 st.success("Tu asistencia está confirmada. Vienes a escuchar los secretos.")
-        with st.form("edit_guest"):
+        with st.form("edit_guest", enter_to_submit=False):
             name = st.text_input("Nombre", value=guest["name"], max_chars=80)
             new_email = st.text_input("Correo", value=guest["email"], max_chars=254)
             topic, upload = "Solo asistencia", None
@@ -318,7 +350,8 @@ def my_dossier():
                     storage.validate_evidence(*evidence)
                     st.session_state.pending_document = {"action": "update", "id": guest["id"], "token": access[1], "name": name, "email": new_email, "topic": topic, "upload": evidence, "presenting": presenting}
                     st.rerun()
-                storage.update(guest["id"], access[1], name, new_email, topic, presenting=presenting)
+                with st.spinner("Guardando tu expediente…", show_time=True):
+                    storage.update(guest["id"], access[1], name, new_email, topic, presenting=presenting)
             except storage.AlreadySubmittedError:
                 st.rerun()
             except (ValueError, storage.StorageError) as exc:
@@ -333,7 +366,7 @@ def my_dossier():
                 st.rerun()
     if st.button("Cerrar mi expediente"):
         st.session_state.pop(f'dossier_present_{guest["id"]}', None)
-        for key in ("guest_access", "recovered_key", "receipt", "receipt_email"):
+        for key in ("guest_access", "recovered_key", "receipt", "receipt_email", "remove_document_id"):
             st.session_state.pop(key, None)
         st.rerun()
 
@@ -417,7 +450,8 @@ def organizer(rows):
                 position = st.number_input("Turno", min_value=1, value=row["position"], step=1)
                 presented = st.checkbox("Ya expuso", value=bool(row["presented"]))
                 if st.form_submit_button("Actualizar turno"):
-                    storage.organize(row["id"], position, presented)
+                    with st.spinner("Actualizando turno…", show_time=True):
+                        storage.organize(row["id"], position, presented)
                     st.rerun()
             if row["filename"]:
                 file = storage.evidence(row["id"])

@@ -63,3 +63,18 @@ p,li,label,[data-testid="stCaptionContainer"] {font-family:'DM Sans',sans-serif;
 @media (prefers-reduced-motion:reduce) {
     .stApp[data-test-script-state="running"] .st-key-registration_panel [data-testid="stFormSubmitButton"] button::before {animation:none;}
 }
+
+/* Keep every action visibly busy and prevent repeated clicks during a rerun. */
+.stApp[data-test-script-state="running"] :is([data-testid="stButton"], [data-testid="stFormSubmitButton"]) button {
+    pointer-events:none;cursor:wait;opacity:.8;
+}
+.stApp[data-test-script-state="running"] :is([data-testid="stButton"], [data-testid="stFormSubmitButton"]) button p {font-size:0;}
+.stApp[data-test-script-state="running"] :is([data-testid="stButton"], [data-testid="stFormSubmitButton"]) button p::after {content:"Procesando…";font-size:14px;}
+.stApp[data-test-script-state="running"] :is([data-testid="stButton"], [data-testid="stFormSubmitButton"]) button::before {
+    content:"";width:16px;height:16px;flex-shrink:0;border:2px solid currentColor;border-right-color:transparent;
+    border-radius:50%;animation:registration-spin .8s linear infinite;
+}
+.stApp[data-test-script-state="running"] :is([data-testid="stTextInput"], [data-testid="stCheckbox"], [data-testid="stFileUploader"]) {pointer-events:none;}
+@media (prefers-reduced-motion:reduce) {
+    .stApp[data-test-script-state="running"] :is([data-testid="stButton"], [data-testid="stFormSubmitButton"]) button::before {animation:none;}
+}

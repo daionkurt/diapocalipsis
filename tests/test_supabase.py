@@ -20,6 +20,20 @@ class SupabaseTest(unittest.TestCase):
         self.env.start()
         self.store = SupabaseStore()
 
+    def test_remove_file_is_authenticated_and_compares_current_path(self):
+        old = {"file_path": "expedientes/original.txt", "file_bucket": "presentaciones"}
+        self.store.request = Mock(side_effect=[[old], [{"id": 1}], []])
+        self.assertTrue(self.store.remove_evidence(1, "private-key"))
+        calls = self.store.request.call_args_list
+        self.assertEqual(calls[1].kwargs["query"]["file_path"], "eq.expedientes/original.txt")
+        self.assertEqual(calls[1].kwargs["query"]["token_hash"], "eq." + storage.key_hash("private-key"))
+        self.assertEqual(calls[2].kwargs["payload"], {"prefixes": ["expedientes/original.txt"]})
+        self.store.request = Mock(side_effect=[[old], []])
+        with self.assertRaises(ValueError):
+            self.store.remove_evidence(1, "private-key")
+        self.assertEqual(self.store.request.call_count, 2)
+
+
     def tearDown(self):
         self.env.stop()
 

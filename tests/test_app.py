@@ -206,6 +206,38 @@ class PartyTest(unittest.TestCase):
         self.assertFalse(storage.is_presenter(storage.lookup("invite@example.com", token)))
 
 
+    def test_remove_evidence_requires_key_and_allows_one_replacement(self):
+        token = storage.register("Ana", "ana@example.com", "La Luna", ("old.txt", b"original"), now=BEFORE)
+        with self.assertRaises(ValueError):
+            storage.remove_evidence(1, "wrong")
+        self.assertEqual(storage.evidence(1), ("old.txt", b"original"))
+        self.assertTrue(storage.remove_evidence(1, token))
+        self.assertIsNone(storage.evidence(1))
+        self.assertIsNotNone(storage.lookup("ana@example.com", token))
+        with self.assertRaises(storage.AlreadyRegisteredError):
+            storage.register("Ana", "ana@example.com", "La Luna")
+        storage.update(1, token, "Ana", "ana@example.com", "La Luna", ("new.txt", b"nuevo"), now=BEFORE)
+        with self.assertRaises(storage.AlreadySubmittedError):
+            storage.update(1, token, "Ana", "ana@example.com", "La Luna", ("again.txt", b"otro"), now=BEFORE)
+        self.assertEqual(storage.evidence(1), ("new.txt", b"nuevo"))
+
+    def test_delete_document_ui_requires_confirmation(self):
+        token = storage.register("Ana", "ana@example.com", "La Luna", ("old.txt", b"original"), now=BEFORE)
+        app = AppTest.from_file(str(Path(__file__).resolve().parents[1] / "app.py"))
+        app.session_state["guest_access"] = (1, token, "ana@example.com")
+        app.run()
+        next(b for b in app.button if b.label == "Eliminar mi documento").click().run()
+        self.assertIsNotNone(storage.evidence(1))
+        next(b for b in app.button if b.label == "Conservar mi documento").click().run()
+        self.assertIsNotNone(storage.evidence(1))
+        next(b for b in app.button if b.label == "Eliminar mi documento").click().run()
+        next(b for b in app.button if b.label == "Sí, eliminar documento").click().run()
+        self.assertFalse(app.exception)
+        self.assertIsNone(storage.evidence(1))
+        self.assertTrue(any("Documento eliminado" in m.value for m in app.success))
+        self.assertTrue(any(t.label == "Tema" for t in app.text_input))
+
+
     def test_registration_ui_and_admin_privacy(self):
         app = AppTest.from_file(str(Path(__file__).resolve().parents[1] / "app.py")).run()
         self.assertEqual(len(app.exception), 0)

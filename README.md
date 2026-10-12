@@ -29,7 +29,7 @@ El panel permite ver correos, descargar presentaciones, cambiar turnos, marcar q
 - Las cargas cierran el **23 de octubre de 2026 a las 5:00 p.m.**. Puedes registrarte sin archivo y completar el expediente después; una vez entregado el documento, el expediente queda confirmado y se ocultan los formularios.
 - Solo se acepta **un documento por correo**, incluso si vuelves a abrir la app o intentas cambiar de correo después de la entrega. Al terminar, verás la confirmación y el nombre del archivo en lugar del formulario.
 - El Protocolo de Seguridad aparece únicamente cuando eliges un archivo y confirmas el formulario: debes aceptar su casilla antes de la entrega definitiva. Sin archivo no se muestra.
-- En **Mi expediente** puedes leer tu PDF o TXT y descargar el archivo original. DOCX y PPTX muestran el texto; Keynote muestra su vista previa incluida si existe. Word DOC y las presentaciones completas se abren descargando el archivo. Las vistas no envían documentos a servicios externos.
+- En **Mi expediente** solo aparece la opción de descargar el archivo original. No se muestran vistas previas ni se renderiza el contenido del documento.
 - La cartelera muestra nombre, tema y estado; correos y archivos quedan en el acceso del organizador.
 - Subir un archivo **no envía un correo**. La invitación también permite enviarlo por tu cuenta a Alejandro.
 

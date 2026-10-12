@@ -73,6 +73,7 @@ class RecoveryTest(unittest.TestCase):
 
     def test_forgot_key_ui_and_generic_document_label(self):
         app = AppTest.from_file(str(Path(__file__).resolve().parents[1] / 'app.py')).run()
+        next(c for c in app.checkbox if c.label == 'Quiero presentar').check().run()
         self.assertFalse(app.exception)
         self.assertTrue(any('Olvidé mi clave' == e.label for e in app.expander))
         labels = [u.proto.label for u in app.get('file_uploader')]

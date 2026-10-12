@@ -42,12 +42,16 @@ def submission_confirmation(guest, token=None):
         st.success("Ya subiste tu documento. Tu evidencia está recibida.")
         st.write(f"Archivo: {filename}")
         st.caption("Aceptamos un solo documento por correo. No necesitas volver a enviarlo.")
+    elif not storage.is_presenter(guest):
+        st.success("¡Asistencia confirmada! Nos vemos en el Diapocalipsis.")
+        st.caption("Vienes como invitado. No necesitas subir un documento.")
     else:
         st.success("Asistencia confirmada. Tu expediente ya está abierto.")
         st.info("Tu documento sigue pendiente. Entrégalo desde Mi expediente con tu correo y clave.")
-    st.write(f'Tema: {guest["topic"]}')
+    if storage.is_presenter(guest):
+        st.write(f'Tema: {guest["topic"]}')
     if token:
-        st.markdown("**Guarda tu clave privada** para consultar tu expediente o entregar el documento pendiente.")
+        st.markdown("**Guarda tu clave privada** para consultar tu expediente.")
         st.code(token, language=None)
         st.download_button("Guardar mi clave", f"DIAPOCALIPSIS · Clave privada\n{token}\n\nUsa tu correo y esta clave en Mi expediente.\n", file_name="mi-clave-diapocalipsis.txt", mime="text/plain")
 
@@ -58,7 +62,7 @@ def existing_registration(email):
         st.success("Este correo ya subió un documento. Tu evidencia ya está recibida.")
         st.caption("Aceptamos un solo documento por correo. Puedes consultar el expediente con tu clave en Mi expediente.")
     else:
-        st.info("Este correo ya está registrado. Abre Mi expediente con tu clave para entregar tu documento pendiente.")
+        st.info("Este correo ya confirmó su asistencia. Puedes consultar tu expediente con tu clave.")
     if st.button("Usar otro correo"):
         st.session_state.pop("blocked_email", None)
         st.session_state.pop("registration_email", None)
@@ -120,21 +124,25 @@ def register_form():
         if guest:
             submission_confirmation(guest, token)
             if st.button("Registrar a otra persona"):
-                for key in ("receipt", "receipt_email", "guest_access", "registration_email"):
+                for key in ("receipt", "receipt_email", "guest_access", "registration_email", "wants_to_present"):
                     st.session_state.pop(key, None)
                 st.rerun()
             return
     st.subheader("Abre tu expediente")
-    html('<div class="section-note">Toda teoría necesita un testigo. Confirma tu asistencia y cuéntanos qué vas a revelar.</div>')
+    html('<div class="section-note">Toda teoría necesita un testigo. Confirma tu asistencia y elige si quieres presentar.</div>')
+    presenting = st.checkbox("Quiero presentar", key="wants_to_present")
     with st.form("registration", clear_on_submit=False):
         left, right = st.columns(2)
         name = left.text_input("Tu nombre", placeholder="¿Quién está detrás de la teoría?", max_chars=80)
         email = right.text_input("Tu correo", placeholder="nombre@correo.com", max_chars=254, key="registration_email")
-        topic = st.text_input("El tema de tu presentación", placeholder="Ej. ¿Y si la Luna es una estación espacial?", max_chars=160)
-        upload = st.file_uploader("Tu documento", disabled=datetime.now(storage.TZ) >= storage.DEADLINE,
-                                  help="Hasta 50 MB. Un solo documento por correo.")
-        st.caption("Puedes registrarte ahora y subir tu presentación después con tu clave. Recepción hasta el 23 de octubre de 2026, 5:00 p.m..")
-        consent = st.checkbox("Acepto que mi nombre y tema aparezcan en la cartelera; mi correo y archivo serán visibles para el organizador.")
+        topic, upload = "Solo asistencia", None
+        if presenting:
+            topic = st.text_input("El tema de tu presentación", placeholder="Ej. ¿Y si la Luna es una estación espacial?", max_chars=160)
+            upload = st.file_uploader("Tu documento", disabled=datetime.now(storage.TZ) >= storage.DEADLINE,
+                                      help="Hasta 50 MB. Un solo documento por correo.")
+            st.caption("Puedes registrarte ahora y subir tu presentación después con tu clave. Recepción hasta el 23 de octubre de 2026, 5:00 p.m..")
+        consent_label = ("Acepto que mi nombre y tema aparezcan en la cartelera; mi correo y archivo serán visibles para el organizador." if presenting else "Acepto que mi nombre aparezca en la cartelera; mi correo será visible para el organizador.")
+        consent = st.checkbox(consent_label)
         submitted = st.form_submit_button("Confirmar mi asistencia  →", type="primary", width="stretch")
     if submitted:
         try:
@@ -152,7 +160,7 @@ def register_form():
                 storage.validate_evidence(*evidence)
                 st.session_state.pending_document = {"action": "register", "name": name, "email": email, "topic": topic, "upload": evidence}
                 st.rerun()
-            token = storage.register(name, email, topic)
+            token = storage.register(name, email, topic, presenting=presenting)
         except (storage.AlreadySubmittedError, storage.AlreadyRegisteredError):
             st.session_state.blocked_email = email
             st.rerun()
@@ -266,7 +274,9 @@ def my_dossier():
         st.session_state.pop("guest_access", None)
         st.rerun()
     existing = storage.evidence_name(guest["id"])
-    if existing:
+    if not storage.is_presenter(guest):
+        submission_confirmation(guest)
+    elif existing:
         submission_confirmation(guest)
         file = storage.evidence(guest["id"])
         if file:
@@ -313,6 +323,9 @@ def lineup(rows):
     if not rows:
         st.info("Aún no hay expedientes aquí. El próximo misterio puede ser el tuyo.")
     for row in rows:
+        if not storage.is_presenter(row):
+            html(f'<div class="dossier"><div class="meta">ASISTENCIA CONFIRMADA</div><h3>{escape(row["name"])}</h3><div class="who">Invitado · Sin presentación</div></div>')
+            continue
         state = "Caso expuesto" if row["presented"] else "Evidencia recibida" if row["filename"] else "Evidencia pendiente"
         html(f'<div class="dossier"><div class="meta">EXP. {row["id"]:03d}</div><h3>{escape(row["topic"])}</h3><div class="who">{escape(row["name"])} &nbsp; / &nbsp; {state}</div></div>')
     st.caption("El orden de exposición se confirma con el organizador. 15 minutos de presentación + 5 minutos de preguntas por expediente.")
@@ -368,7 +381,13 @@ def organizer(rows):
         return
     st.caption("Cambia el número de turno para ordenar las exposiciones. Si dos turnos coinciden, se usa el orden de registro.")
     st.caption("Cada expediente: 15 minutos de presentación + 5 minutos de preguntas.")
-    for i, row in enumerate(rows):
+    speakers = [r for r in rows if storage.is_presenter(r)]
+    attendees = [r for r in rows if not storage.is_presenter(r)]
+    if attendees:
+        with st.expander(f"Invitados sin presentación · {len(attendees)}"):
+            for row in attendees:
+                st.write(f'{row["name"]} · {row["email"]}')
+    for i, row in enumerate(speakers):
         when = storage.EVENT + timedelta(minutes=i * (15 + 5))
         with st.expander(f'{i + 1:02d} · {when.strftime("%H:%M")} · {row["name"]} — {row["topic"]}'):
             st.write(f'Correo: {row["email"]}')
@@ -389,7 +408,7 @@ def organizer(rows):
     writer.writerow(["Turno", "Nombre", "Email", "Tema", "Archivo", "Expuso"])
     for row in rows:
         # Prevent spreadsheet formula execution in user-provided cells.
-        cells = [row["position"], row["name"], row["email"], row["topic"], row["filename"] or "Pendiente", "Sí" if row["presented"] else "No"]
+        cells = [row["position"], row["name"], row["email"], row["topic"], row["filename"] or ("Pendiente" if storage.is_presenter(row) else "No aplica"), "Sí" if row["presented"] else "No"]
         writer.writerow(["'" + c if isinstance(c, str) and c.lstrip().startswith(("=", "+", "-", "@")) else c for c in cells])
     st.download_button("Exportar lista de asistentes · CSV", output.getvalue().encode("utf-8-sig"), file_name="diapocalipsis-asistentes.csv", mime="text/csv")
 

@@ -160,14 +160,30 @@ class PartyTest(unittest.TestCase):
         self.assertEqual(len(fresh.get("file_uploader")), 0)
         self.assertTrue(any("ya subió" in s.value for s in fresh.success))
 
+    def test_attendee_confirms_without_topic_or_document(self):
+        app = AppTest.from_file(str(Path(__file__).resolve().parents[1] / "app.py")).run()
+        self.assertFalse(any(t.label == "El tema de tu presentación" for t in app.text_input))
+        self.assertEqual(len(app.get("file_uploader")), 0)
+        next(t for t in app.text_input if t.label == "Tu nombre").set_value("Invitada")
+        next(t for t in app.text_input if t.label == "Tu correo").set_value("invitada@example.com")
+        next(c for c in app.checkbox if "Acepto que" in c.label).check()
+        next(b for b in app.button if "Confirmar mi asistencia" in b.label).click().run()
+        self.assertFalse(app.exception)
+        self.assertFalse(storage.is_presenter(storage.guests()[0]))
+        self.assertFalse(any("documento sigue pendiente" in m.value for m in app.info))
+        self.assertTrue(any("Asistencia confirmada" in m.value for m in app.success))
+        self.assertEqual(len(app.get("file_uploader")), 0)
+
+
     def test_registration_ui_and_admin_privacy(self):
         app = AppTest.from_file(str(Path(__file__).resolve().parents[1] / "app.py")).run()
         self.assertEqual(len(app.exception), 0)
         self.assertEqual(len(app.selectbox), 0)
+        next(c for c in app.checkbox if c.label == "Quiero presentar").check().run()
         next(t for t in app.text_input if t.label == "Tu nombre").set_value("Ana")
         next(t for t in app.text_input if t.label == "Tu correo").set_value("ana@example.com")
         next(t for t in app.text_input if t.label == "El tema de tu presentación").set_value("Los secretos de la Luna")
-        app.checkbox[0].check()
+        next(c for c in app.checkbox if "Acepto que" in c.label).check()
         app.button[0].click().run()
         self.assertEqual(len(app.exception), 0)
         self.assertEqual(len(storage.guests()), 1)

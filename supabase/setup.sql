@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS public.diapocalipsis_guests (
     created_at timestamptz NOT NULL DEFAULT now(),
     position bigint CHECK (position > 0),
     presented boolean NOT NULL DEFAULT false,
+    is_presenter boolean NOT NULL DEFAULT true,
     filename text,
     file_path text,
     file_bucket text,
@@ -20,6 +21,7 @@ CREATE TABLE IF NOT EXISTS public.diapocalipsis_guests (
         OR (filename IS NOT NULL AND file_path IS NOT NULL AND file_bucket IS NOT NULL))
 );
 
+ALTER TABLE public.diapocalipsis_guests ADD COLUMN IF NOT EXISTS is_presenter boolean NOT NULL DEFAULT true;
 ALTER TABLE public.diapocalipsis_guests ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.diapocalipsis_guests FROM PUBLIC, anon, authenticated;
 GRANT SELECT, INSERT, UPDATE ON public.diapocalipsis_guests TO service_role;

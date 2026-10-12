@@ -89,3 +89,7 @@ RESEND_FROM = "Diapocalipsis <expedientes@tu-dominio.com>"
 No se necesita SMTP. La API key permanece en el servidor. Mientras estos valores estén vacíos, la recuperación sigue disponible mediante el organizador. Los envíos automáticos se prueban con un transporte simulado; la entrega real requiere configurar Resend.
 
 Referencias: [API de envío de Resend](https://resend.com/docs/api-reference/emails/send-email), [verificación del dominio](https://resend.com/docs/dashboard/domains/introduction).
+
+### Asistencia sin presentación
+
+El checkbox **Quiero presentar** muestra tema y documento al activarse. Sin marcarlo, nombre y correo bastan para confirmar asistencia: no se pide evidencia y no se asigna turno de exposición. En proyectos existentes, ejecuta `supabase/attendance.sql` antes de desplegar; los registros anteriores conservan su condición de expositores.

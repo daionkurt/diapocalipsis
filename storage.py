@@ -99,7 +99,14 @@ def connect():
         filename TEXT NOT NULL, contents BLOB NOT NULL, updated_at TEXT NOT NULL
     );
     """)
+    if 'is_presenter' not in {r[1] for r in conn.execute('PRAGMA table_info(guests)')}:
+        conn.execute('ALTER TABLE guests ADD COLUMN is_presenter INTEGER NOT NULL DEFAULT 1')
+        conn.commit()
     return conn
+
+
+def is_presenter(guest):
+    return bool(guest.get('is_presenter', True))
 
 
 def normalize_email(email):
@@ -159,12 +166,16 @@ def validate_evidence(filename, contents, now=None):
     return filename
 
 
-def register(name, email, topic, upload=None, now=None):
+def register(name, email, topic="", upload=None, now=None, presenting=True):
+    if not presenting:
+        if upload:
+            raise ValueError("Solo quienes presentan pueden entregar un documento.")
+        topic = "Solo asistencia"
     name, email, topic = validate_fields(name, email, topic)
     filename = validate_evidence(*upload, now=now) if upload else None
     remote = remote_store()
     if remote:
-        return remote.register(name, email, topic, (filename, upload[1]) if upload else None)
+        return remote.register(name, email, topic, (filename, upload[1]) if upload else None, presenting=presenting)
     token = make_access_key()
     with closing(connect()) as conn, conn:
         conn.execute("BEGIN IMMEDIATE")
@@ -176,8 +187,8 @@ def register(name, email, topic, upload=None, now=None):
         position = conn.execute("SELECT COALESCE(MAX(position), 0)+1 FROM guests").fetchone()[0]
         try:
             cur = conn.execute(
-                "INSERT INTO guests(name,email,topic,category,token_hash,created_at,position) VALUES(?,?,?,?,?,?,?)",
-                (name, email, topic, "Otro misterio", key_hash(token), datetime.now(TZ).isoformat(), position),
+                "INSERT INTO guests(name,email,topic,category,token_hash,created_at,position,is_presenter) VALUES(?,?,?,?,?,?,?,?)",
+                (name, email, topic, "Otro misterio", key_hash(token), datetime.now(TZ).isoformat(), position, int(presenting)),
             )
         except sqlite3.IntegrityError:
             raise AlreadyRegisteredError() from None
@@ -223,7 +234,7 @@ def guests():
     if remote:
         return remote.guests()
     with closing(connect()) as conn:
-        return [dict(r) for r in conn.execute("""SELECT g.id,g.name,g.email,g.topic,g.created_at,g.position,g.presented,
+        return [dict(r) for r in conn.execute("""SELECT g.id,g.name,g.email,g.topic,g.is_presenter,g.created_at,g.position,g.presented,
             e.filename FROM guests g LEFT JOIN evidence e ON e.guest_id=g.id ORDER BY g.position,g.id""")]
 
 

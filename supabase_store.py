@@ -11,7 +11,7 @@ from settings import setting
 from storage import StorageError, content_type, CONTENT_TYPES, make_access_key, key_hash, AlreadySubmittedError, AlreadyRegisteredError
 
 TABLE = "/rest/v1/diapocalipsis_guests"
-LIST_COLUMNS = "id,name,email,topic,created_at,position,presented,filename"
+LIST_COLUMNS = "id,name,email,topic,is_presenter,created_at,position,presented,filename"
 
 
 class RemoteError(StorageError):
@@ -96,7 +96,7 @@ class SupabaseStore:
                 raise ValueError("No se aceptó el archivo: la recepción cerró o la evidencia no está disponible en el bucket privado.") from None
             raise
 
-    def register(self, name, email, topic, upload=None):
+    def register(self, name, email, topic, upload=None, presenting=True):
         status = self.registration_status(email)
         if status["submitted"]:
             raise AlreadySubmittedError()
@@ -104,7 +104,7 @@ class SupabaseStore:
             raise AlreadyRegisteredError()
         token = make_access_key()
         uploaded = self.upload(*upload) if upload else None
-        payload = {"name": name, "email": email, "topic": topic, "category": "Otro misterio", "token_hash": key_hash(token)}
+        payload = {"name": name, "email": email, "topic": topic, "category": "Otro misterio", "is_presenter": bool(presenting), "token_hash": key_hash(token)}
         if uploaded:
             payload.update(uploaded)
         try:

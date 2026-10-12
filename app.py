@@ -315,7 +315,7 @@ def lineup(rows):
     for row in rows:
         state = "Caso expuesto" if row["presented"] else "Evidencia recibida" if row["filename"] else "Evidencia pendiente"
         html(f'<div class="dossier"><div class="meta">EXP. {row["id"]:03d}</div><h3>{escape(row["topic"])}</h3><div class="who">{escape(row["name"])} &nbsp; / &nbsp; {state}</div></div>')
-    st.caption("El orden de exposición se confirma con el organizador. 20 minutos de presentación + 5 a 10 minutos de debate por expediente.")
+    st.caption("El orden de exposición se confirma con el organizador. 15 minutos de presentación + 5 minutos de preguntas por expediente.")
 
 
 def invitation():
@@ -323,7 +323,7 @@ def invitation():
     cards = [
         ("◷", "El contacto", "Viernes 23 de octubre de 2026.<br>A partir de las 6:30 p.m."),
         ("⌖", "Coordenadas", "Av. Guadalupe #5511, Int. B15.<br>Puedes dejar tu nave/coche en la gasolinera de enfrente."),
-        ("◴", "La dinámica", "20 minutos exactos para exponer.<br>5 a 10 minutos de debate y preguntas."),
+        ("◴", "La dinámica", "15 minutos exactos para exponer.<br>5 minutos de preguntas."),
         ("♧", "Menú del terror", "Bebidas, botana y cena terroríficas para sobrevivir a la noche."),
         ("♜", "El outfit", "Un look relacionado a tu tema o a tu película de terror favorita. Un sombrero o gorro de aluminio también cuenta."),
         ("✉", "Recepción de evidencia", "Tu documento, a más tardar el viernes 23 a las 5:00 p.m. Sube tu archivo aquí o envíalo a alejandrofls@icloud.com."),
@@ -335,7 +335,7 @@ def invitation():
                 html(f'<div class="info-card"><div class="symbol">{symbol}</div><h3>{title}</h3><p>{description}</p></div>')
     st.link_button("Abrir correo de Alejandro", "mailto:alejandrofls@icloud.com")
     st.caption("Las cargas de esta app se guardan para el organizador; no se envían automáticamente por correo.")
-    details = "DIAPOCALIPSIS\nViernes 23 de octubre de 2026, desde las 6:30 p.m.\nAv. Guadalupe #5511, Int. B15.\nRecepción de documentos hasta las 5:00 p.m. del viernes 23.\n20 minutos de presentación + 5 a 10 minutos de debate.\nBebidas, botana y cena. Ven con un look o accesorio relacionado con tu tema.\nContacto: alejandrofls@icloud.com\n"
+    details = "DIAPOCALIPSIS\nViernes 23 de octubre de 2026, desde las 6:30 p.m.\nAv. Guadalupe #5511, Int. B15.\nRecepción de documentos hasta las 5:00 p.m. del viernes 23.\n15 minutos de presentación + 5 minutos de preguntas.\nBebidas, botana y cena. Ven con un look o accesorio relacionado con tu tema.\nContacto: alejandrofls@icloud.com\n"
     st.download_button("Guardar los detalles de la noche", details, file_name="diapocalipsis-detalles.txt", mime="text/plain")
 
 
@@ -367,9 +367,9 @@ def organizer(rows):
         st.info("Los registros aparecerán aquí cuando alguien confirme su asistencia.")
         return
     st.caption("Cambia el número de turno para ordenar las exposiciones. Si dos turnos coinciden, se usa el orden de registro.")
-    debate = st.slider("Minutos de debate por presentación", 5, 10, 10)
+    st.caption("Cada expediente: 15 minutos de presentación + 5 minutos de preguntas.")
     for i, row in enumerate(rows):
-        when = storage.EVENT + timedelta(minutes=i * (20 + debate))
+        when = storage.EVENT + timedelta(minutes=i * (15 + 5))
         with st.expander(f'{i + 1:02d} · {when.strftime("%H:%M")} · {row["name"]} — {row["topic"]}'):
             st.write(f'Correo: {row["email"]}')
             st.caption("Horario estimado, sin incluir pausas ni cena.")
@@ -419,7 +419,7 @@ except (OSError, sqlite3.Error):
     st.error("No podemos abrir el archivo de expedientes. Revisa el almacenamiento de la app.")
     st.stop()
 ready = sum(bool(r["filename"]) for r in rows)
-for col, value, label in zip(st.columns(3), [f"{len(rows):02d}", f"{ready:02d}", "20 + 10"], ["Testigos confirmados", "Evidencias recibidas", "Minutos por expediente"]):
+for col, value, label in zip(st.columns(3), [f"{len(rows):02d}", f"{ready:02d}", "15 + 5"], ["Testigos confirmados", "Evidencias recibidas", "Minutos por expediente"]):
     with col:
         html(f'<div class="stat"><b>{value}</b><span>{label}</span></div>')
 registration, personal, board, info, admin = st.tabs(["01 / Confirmar", "02 / Mi expediente", "03 / Cartelera", "04 / La noche", "⌑ Organizador"])

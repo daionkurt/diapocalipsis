@@ -19,7 +19,7 @@ Esta instalación ya tiene una clave aleatoria local en `.streamlit/secrets.toml
 
 En una instalación nueva, copia `.streamlit/secrets.toml.example` a `.streamlit/secrets.toml` y reemplaza el valor de `ADMIN_PASSWORD` con tu propia contraseña larga. También puedes configurarla como variable de entorno. Sin contraseña, el panel permanece cerrado. No publiques tu archivo de secretos.
 
-El panel permite ver correos, descargar presentaciones, cambiar turnos, marcar quién ya expuso y exportar asistentes a CSV. Los horarios estimados comienzan a las 18:30 y suman 20 minutos de presentación + 5 a 10 minutos de debate; no incluyen cena ni pausas.
+El panel permite ver correos, descargar presentaciones, cambiar turnos, marcar quién ya expuso y exportar asistentes a CSV. Los horarios estimados comienzan a las 18:30 y suman 15 minutos de presentación + 5 minutos de preguntas; no incluyen cena ni pausas.
 
 ## Para los invitados
 

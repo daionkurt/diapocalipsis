@@ -5,6 +5,7 @@ import csv
 import io
 import secrets
 import sqlite3
+import time
 
 import streamlit as st
 import storage
@@ -12,7 +13,7 @@ import recovery
 import roulette
 import streamlit.components.v1 as components
 from settings import setting
-from document_preview import show_document
+from document_preview import download_document
 
 ROOT = Path(__file__).parent
 SAFETY_PROTOCOL = (
@@ -34,12 +35,25 @@ def secret_setting(key):
     return setting(key)
 
 
+def cached_rows():
+    cached = st.session_state.get("guest_rows_cache")
+    if cached and time.monotonic() - cached["at"] < 5:
+        return cached["rows"]
+    rows = storage.guests()
+    st.session_state.guest_rows_cache = {"at": time.monotonic(), "rows": rows}
+    return rows
+
+
+def invalidate_rows():
+    st.session_state.pop("guest_rows_cache", None)
+
+
 def upload_tuple(upload):
     return (upload.name, upload.getvalue()) if upload is not None else None
 
 
 def submission_confirmation(guest, token=None):
-    filename = storage.evidence_name(guest["id"])
+    filename = guest["filename"] if "filename" in guest else storage.evidence_name(guest["id"])
     if filename:
         st.success("Ya subiste tu documento. Tu evidencia está recibida.")
         st.write(f"Archivo: {filename}")
@@ -105,6 +119,7 @@ def review_document(pending):
     except (OSError, sqlite3.Error):
         st.error("No pudimos guardar tu documento. Intenta de nuevo.")
     else:
+        invalidate_rows()
         st.session_state.pop("pending_document", None)
         st.session_state.receipt = token
         st.session_state.receipt_email = pending["email"]
@@ -175,6 +190,7 @@ def register_form():
             except (OSError, sqlite3.Error):
                 st.error("No pudimos guardar el expediente. Intenta de nuevo o contacta al organizador.")
             else:
+                invalidate_rows()
                 st.session_state.receipt = token
                 st.session_state.receipt_email = email
                 st.rerun()
@@ -242,6 +258,7 @@ def remove_document(guest, token, filename):
         else:
             st.session_state.pop("remove_document_id", None)
             st.session_state.pop("pending_document", None)
+            invalidate_rows()
             st.session_state.removed_document = cleaned
             st.rerun()
 
@@ -307,7 +324,7 @@ def my_dossier():
     if not guest:
         st.session_state.pop("guest_access", None)
         st.rerun()
-    existing = storage.evidence_name(guest["id"])
+    existing = guest["filename"] if "filename" in guest else storage.evidence_name(guest["id"])
     presenting = st.checkbox("Quiero presentar", value=storage.is_presenter(guest), key=f'dossier_present_{guest["id"]}')
     if presenting != storage.is_presenter(guest):
         if presenting:
@@ -322,12 +339,11 @@ def my_dossier():
             except (ValueError, storage.StorageError) as exc:
                 st.error(str(exc))
             else:
+                invalidate_rows()
                 st.session_state.edited_success = True
                 st.rerun()
         submission_confirmation(guest)
-        file = storage.evidence(guest["id"])
-        if file:
-            show_document(file[0], file[1], guest["id"])
+        download_document(existing, guest["id"], email=access[2], token=access[1])
         remove_document(guest, access[1], existing)
     else:
         if presenting == storage.is_presenter(guest):
@@ -364,6 +380,7 @@ def my_dossier():
                 st.session_state.guest_access = (guest["id"], access[1], new_email)
                 st.session_state.receipt_email = new_email
                 st.session_state.receipt = access[1]
+                invalidate_rows()
                 st.session_state.edited_success = True
                 st.rerun()
     if st.button("Cerrar mi expediente"):
@@ -408,7 +425,35 @@ def invitation():
     st.download_button("Guardar los detalles de la noche", details, file_name="diapocalipsis-detalles.txt", mime="text/plain")
 
 
-def investigations(rows, admin_mode):
+def draw_investigation(options):
+    try:
+        picked = roulette.draw()
+    except storage.StorageError as exc:
+        st.session_state.roulette_error = str(exc)
+    else:
+        if picked is not None:
+            if picked not in {row["id"] for row in options}:
+                invalidate_rows()
+            st.session_state.roulette_animation = picked
+            st.session_state.roulette_previous_options = options
+
+
+def reset_investigations():
+    try:
+        roulette.reset()
+    except storage.StorageError as exc:
+        st.session_state.roulette_error = str(exc)
+    else:
+        st.session_state.pop("roulette_animation", None)
+        st.session_state.pop("roulette_previous_options", None)
+
+
+@st.fragment
+def investigations(admin_mode):
+    rows = cached_rows()
+    error = st.session_state.pop("roulette_error", None)
+    if error:
+        st.error(error)
     st.subheader("La ruleta de lo inexplicable")
     st.caption("Que el azar decida qué secreto sale a la luz. Solo participan quienes presentan y ya entregaron su documento.")
     candidates = roulette.eligible(rows)
@@ -431,18 +476,8 @@ def investigations(rows, admin_mode):
                 for i, row in enumerate(remaining, 1):
                     st.write(f"{i:02d} · {row['name']} — {row['topic']}")
         draw_col, reset_col = st.columns(2)
-        if draw_col.button("Iniciar investigaciones 👁", type="primary", disabled=not remaining, width="stretch"):
-            with st.spinner("Eligiendo el próximo secreto…", show_time=True):
-                picked = roulette.draw()
-            if picked is not None:
-                st.session_state.roulette_animation = picked
-                st.session_state.roulette_previous_options = remaining
-            st.rerun()
-        if reset_col.button("Reiniciar toda la ruleta", disabled=not current["drawn"], width="stretch"):
-            roulette.reset()
-            st.session_state.pop("roulette_animation", None)
-            st.session_state.pop("roulette_previous_options", None)
-            st.rerun()
+        draw_col.button("Iniciar investigaciones 👁", type="primary", disabled=not remaining, width="stretch", on_click=draw_investigation, args=(remaining,))
+        reset_col.button("Reiniciar toda la ruleta", disabled=not current["drawn"], width="stretch", on_click=reset_investigations)
         if not candidates:
             st.info("Aún no hay archivos secretos listos para investigar.")
         elif not remaining:
@@ -452,9 +487,7 @@ def investigations(rows, admin_mode):
             st.write(f"Tema: {selected['topic']}")
             st.caption("15 minutos de presentación + 5 minutos de preguntas. Esta presentación ya salió de la ruleta.")
             if admin_mode and st.session_state.get("admin_authenticated"):
-                file = storage.evidence(selected["id"])
-                if file:
-                    st.download_button("Descargar presentación elegida", file[1], file_name=file[0], mime=storage.content_type(file[0]), key=f"roulette_download_{selected['id']}")
+                download_document(selected["filename"], selected["id"], label="Descargar presentación elegida", key=f"roulette_download_{selected['id']}")
             else:
                 st.caption("El organizador puede descargarla al abrir su acceso privado. El autor también puede abrirla desde Mi expediente.")
         if current["drawn"]:
@@ -511,10 +544,10 @@ def organizer(rows):
                 if st.form_submit_button("Actualizar turno"):
                     with st.spinner("Actualizando turno…", show_time=True):
                         storage.organize(row["id"], position, presented)
+                    invalidate_rows()
                     st.rerun()
             if row["filename"]:
-                file = storage.evidence(row["id"])
-                st.download_button("Descargar evidencia", file[1], file_name=file[0], key=f'download_{row["id"]}', mime=storage.content_type(file[0]))
+                download_document(row["filename"], row["id"], label="Descargar evidencia", key=f'download_{row["id"]}')
             else:
                 st.warning("Presentación pendiente.")
     output = io.StringIO()
@@ -543,7 +576,7 @@ with right:
         st.image(str(ROOT / "assets/invitacion.png"), width="stretch", output_format="PNG")
 
 try:
-    rows = storage.guests()
+    rows = cached_rows()
 except storage.StorageError as exc:
     st.error(str(exc))
     st.info("Completa la configuración de Supabase y ejecuta supabase/setup.sql en SQL Editor. Después recarga esta página.")
@@ -559,28 +592,35 @@ admin_mode = st.query_params.get("admin", "").lower() == "true"
 tab_names = ["01 / Confirmar", "02 / Mi expediente", "03 / Cartelera", "04 / La noche", "05 / Investigaciones"]
 if admin_mode:
     tab_names.append("⌑ Organizador")
-tabs = st.tabs(tab_names)
+if st.session_state.get("navigation") not in tab_names:
+    st.session_state.navigation = tab_names[0]
+tabs = st.tabs(tab_names, key="navigation", on_change="rerun")
 registration, personal, board, info, investigation_tab = tabs[:5]
-with registration:
-    try:
-        register_form()
-    except storage.StorageError as exc:
-        st.error(str(exc))
-with personal:
-    try:
-        my_dossier()
-    except storage.StorageError as exc:
-        st.error(str(exc))
-with board:
-    lineup(rows)
-with info:
-    invitation()
-with investigation_tab:
-    try:
-        investigations(rows, admin_mode)
-    except storage.StorageError as exc:
-        st.error(str(exc))
-if admin_mode:
+if registration.open:
+    with registration:
+        try:
+            register_form()
+        except storage.StorageError as exc:
+            st.error(str(exc))
+if personal.open:
+    with personal:
+        try:
+            my_dossier()
+        except storage.StorageError as exc:
+            st.error(str(exc))
+if board.open:
+    with board:
+        lineup(rows)
+if info.open:
+    with info:
+        invitation()
+if investigation_tab.open:
+    with investigation_tab:
+        try:
+            investigations(admin_mode)
+        except storage.StorageError as exc:
+            st.error(str(exc))
+if admin_mode and tabs[5].open:
     with tabs[5]:
         try:
             organizer(rows)

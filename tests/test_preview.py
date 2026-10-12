@@ -22,6 +22,7 @@ class DownloadTest(unittest.TestCase):
                     app = AppTest.from_file(path).run()
                     self.assertNotIn('Descargar mi archivo', [i.proto.label for i in app.get('download_button')])
                     app.session_state['guest_access'] = (1, token, 'ana@example.com')
+                    app.session_state['navigation'] = '02 / Mi expediente'
                     app.run()
                     self.assertFalse(app.exception)
                     viewer.assert_not_called()

@@ -75,12 +75,14 @@ class RecoveryTest(unittest.TestCase):
         app = AppTest.from_file(str(Path(__file__).resolve().parents[1] / 'app.py')).run()
         next(c for c in app.checkbox if c.label == 'Quiero presentar').check().run()
         self.assertFalse(app.exception)
-        self.assertTrue(any('Olvidé mi clave' == e.label for e in app.expander))
         labels = [u.proto.label for u in app.get('file_uploader')]
         self.assertEqual(labels, ['Tu documento'])
         self.assertFalse(any('PDF, KEY' in u.proto.label for u in app.get('file_uploader')))
         self.assertTrue(any('5:00 p.m.' in c.value for c in app.caption))
         self.assertFalse(any('Ciudad de México' in c.value for c in app.caption))
+        app.session_state['navigation'] = '02 / Mi expediente'
+        app.run()
+        self.assertTrue(any('Olvidé mi clave' == e.label for e in app.expander))
 
     def test_deadline_accepts_afternoon_until_five(self):
         self.assertEqual(storage.DEADLINE.hour, 17)

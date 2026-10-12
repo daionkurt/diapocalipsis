@@ -105,3 +105,7 @@ En **Mi expediente → Eliminar mi documento**, confirma el borrado. Se conserva
 **Investigaciones** elige al azar entre expositores con archivo, excluye a quienes ya salieron y conserva la ronda en Supabase aunque se recargue la app. **Reiniciar toda la ruleta** limpia el sorteo, sin modificar registros ni archivos. Ejecuta `supabase/roulette.sql` al instalar o actualizar. Los invitados sin archivo quedan fuera. La presentación seleccionada se puede descargar cuando el organizador haya iniciado sesión.
 
 El apartado **Organizador** solo aparece en `https://diapocalipsis.streamlit.app/?admin=true`; la URL no sustituye la clave privada.
+
+### Rendimiento de los botones
+
+Solo se ejecuta la pestaña abierta. La ruleta se actualiza como un fragmento independiente: cada giro hace una selección y una lectura de estado, sin volver a procesar los demás apartados. Los archivos se obtienen únicamente al pulsar Descargar, con validación de acceso y sin reejecutar la página. La lista de asistentes se conserva cinco segundos por sesión y se invalida inmediatamente después de guardar cambios.

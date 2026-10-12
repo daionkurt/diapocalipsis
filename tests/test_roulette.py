@@ -46,6 +46,7 @@ class RouletteTest(unittest.TestCase):
         self.assertEqual(app.tabs[-1].label,'⌑ Organizador')
         self.assertFalse(any(b.label=='Descargar presentación elegida' for b in app.get('download_button')))
         app.session_state['admin_authenticated']=True
+        app.session_state['navigation']='05 / Investigaciones'
         app.run()
         self.assertTrue(any(b.label=='Descargar presentación elegida' for b in app.get('download_button')))
 

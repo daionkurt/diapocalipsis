@@ -193,6 +193,7 @@ class PartyTest(unittest.TestCase):
         token = storage.register("Invitada", "invite@example.com", presenting=False)
         app = AppTest.from_file(str(Path(__file__).resolve().parents[1] / "app.py"))
         app.session_state["guest_access"] = (1, token, "invite@example.com")
+        app.session_state["navigation"] = "02 / Mi expediente"
         app.run()
         self.assertFalse(any(t.label == "Tema" for t in app.text_input))
         next(c for c in app.checkbox if c.key == "dossier_present_1").check().run()
@@ -225,6 +226,7 @@ class PartyTest(unittest.TestCase):
         token = storage.register("Ana", "ana@example.com", "La Luna", ("old.txt", b"original"), now=BEFORE)
         app = AppTest.from_file(str(Path(__file__).resolve().parents[1] / "app.py"))
         app.session_state["guest_access"] = (1, token, "ana@example.com")
+        app.session_state["navigation"] = "02 / Mi expediente"
         app.run()
         next(b for b in app.button if b.label == "Eliminar mi documento").click().run()
         self.assertIsNotNone(storage.evidence(1))
@@ -254,6 +256,10 @@ class PartyTest(unittest.TestCase):
         self.assertEqual(len(storage.guests()), 1)
         self.assertTrue(app.session_state["receipt"])
         self.assertFalse(any("ana@example.com" in m.value for m in app.markdown))
+        app = AppTest.from_file(str(Path(__file__).resolve().parents[1] / "app.py"))
+        app.query_params["admin"] = "true"
+        app.session_state["navigation"] = "⌑ Organizador"
+        app.run()
         login = next(t for t in app.text_input if t.label == "Clave del organizador")
         login.set_value("test-organizer-password")
         next(b for b in app.button if b.label == "Entrar al archivo").click().run()

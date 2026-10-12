@@ -3,12 +3,12 @@ from html import escape
 from pathlib import Path
 import csv
 import io
-import os
 import secrets
 import sqlite3
 
 import streamlit as st
 import storage
+from settings import setting
 
 ROOT = Path(__file__).parent
 SAFETY_PROTOCOL = (
@@ -27,12 +27,7 @@ def html(text):
 
 
 def secret_setting(key):
-    if os.environ.get(key):
-        return os.environ[key]
-    try:
-        return st.secrets.get(key, "")
-    except (FileNotFoundError, st.errors.StreamlitSecretNotFoundError):
-        return ""
+    return setting(key)
 
 
 def upload_tuple(upload):

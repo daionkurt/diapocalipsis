@@ -17,7 +17,7 @@ BEFORE = storage.DEADLINE.replace(day=22)
 class PartyTest(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
-        self.env = patch.dict(os.environ, {"DIAPOCALIPSIS_DATA_DIR": self.temp.name, "ADMIN_PASSWORD": "test-organizer-password", "SUPABASE_URL": "", "SUPABASE_SECRET_KEY": ""})
+        self.env = patch.dict(os.environ, {"STORAGE_BACKEND": "sqlite", "DIAPOCALIPSIS_DATA_DIR": self.temp.name, "ADMIN_PASSWORD": "test-organizer-password", "SUPABASE_URL": "", "SUPABASE_SECRET_KEY": ""})
         self.env.start()
 
     def tearDown(self):

@@ -23,11 +23,12 @@ El panel permite ver correos, descargar presentaciones, cambiar turnos, marcar q
 
 ## Para los invitados
 
-- Registra nombre, email y tema, sin elegir un tipo de misterio; el archivo es opcional para confirmar asistencia.
+- Registra nombre, email y tema dentro de un único formulario; el archivo es opcional para confirmar asistencia. Solo se permite un registro por correo, ignorando mayúsculas y espacios al inicio o final.
 - Guarda tu clave corta, con un formato como `luna-ovni-4826`. Usa esa clave y tu correo en **Mi expediente** para consultar tu entrega o completar tus datos antes de entregar. Las claves largas anteriores siguen funcionando. Las claves nuevas aceptan mayúsculas y minúsculas.
 - PDF (`.pdf`), Keynote (`.key`), PowerPoint (`.pptx`), Word (`.doc`/`.docx`) y texto (`.txt`), máximo 50 MB. Si Keynote se guarda como carpeta o en un formato antiguo, expórtalo a PDF.
 - Las cargas cierran el **23 de octubre de 2026 a las 12:00 p.m., zona America/Mexico_City**. Puedes registrarte sin archivo y completar el expediente después; una vez entregado el documento, el expediente queda confirmado y se ocultan los formularios.
 - Solo se acepta **un documento por correo**, incluso si vuelves a abrir la app o intentas cambiar de correo después de la entrega. Al terminar, verás la confirmación y el nombre del archivo en lugar del formulario.
+- El Protocolo de Seguridad aparece únicamente cuando eliges un archivo y confirmas el formulario: debes aceptar su casilla antes de la entrega definitiva. Sin archivo no se muestra.
 - La cartelera muestra nombre, tema y estado; correos y archivos quedan en el acceso del organizador.
 - Subir un archivo **no envía un correo**. La invitación también permite enviarlo por tu cuenta a Alejandro.
 
@@ -44,7 +45,7 @@ La app ya tiene integración con Supabase por HTTPS, sin necesitar la contraseñ
    SUPABASE_STORAGE_BUCKET = "presentaciones"
    ```
 
-   Conserva `ADMIN_PASSWORD`. Si compartiste una clave en un chat o captura, revócala y usa una nueva. La clave secreta debe permanecer en el servidor; no se publica en Git ni se envía al navegador de los invitados.
+   Conserva `ADMIN_PASSWORD`. En Streamlit Cloud, guarda estos valores en **App settings → Secrets**; el archivo local no se debe subir a Git. Si compartiste una clave en un chat o captura, revócala y usa una nueva. La clave secreta debe permanecer en el servidor; no se publica en Git ni se envía al navegador de los invitados.
 3. Ejecuta `python3 scripts/check_supabase.py`. Esta comprobación solo lee y confirma la tabla y el bucket privado. Recarga la app.
 
 La URL de este proyecto ya está configurada localmente. Mientras la configuración esté incompleta, la app muestra el pendiente y no registra asistentes en otra base por accidente. Las pruebas locales usan respuestas simuladas para los casos de Supabase; `scripts/check_supabase.py` verifica la conexión real sin mostrar claves ni datos de invitados.
@@ -59,7 +60,7 @@ Referencias: [API REST de Supabase](https://supabase.com/docs/guides/api), [clav
 
 ## Modo local
 
-Cuando no configuras ni `SUPABASE_URL` ni `SUPABASE_SECRET_KEY`, la app usa SQLite y guarda registros y archivos en `data/expedientes.sqlite3`, excluido de Git. `DIAPOCALIPSIS_DATA_DIR` permite cambiar la carpeta. Respáldala para conservar todo. No se migran registros locales a Supabase automáticamente.
+Supabase es la base predeterminada, también en Streamlit Cloud mediante `st.secrets`. Si faltan claves, la app muestra el error y no cambia automáticamente de base. Para usar el modo local de forma explícita, configura `STORAGE_BACKEND = "sqlite"`. En ese modo la app usa SQLite y guarda registros y archivos en `data/expedientes.sqlite3`, excluido de Git. `DIAPOCALIPSIS_DATA_DIR` permite cambiar la carpeta. Respáldala para conservar todo. No se migran registros locales a Supabase automáticamente.
 
 Las fuentes Bodoni Moda, Cormorant Garamond y DM Sans se cargan desde Google Fonts, con fuentes locales de respaldo si no hay conexión. La invitación está incluida y funciona sin conexión.
 

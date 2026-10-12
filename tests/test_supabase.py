@@ -13,7 +13,7 @@ from supabase_store import RemoteError, SupabaseStore, TABLE
 class SupabaseTest(unittest.TestCase):
     def setUp(self):
         self.env = patch.dict(os.environ, {
-            "SUPABASE_URL": "https://example.supabase.co",
+            "STORAGE_BACKEND": "supabase", "SUPABASE_URL": "https://example.supabase.co",
             "SUPABASE_SECRET_KEY": "sb_secret_test-only-not-a-real-key",
             "SUPABASE_STORAGE_BUCKET": "presentaciones",
         })

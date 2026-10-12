@@ -18,7 +18,10 @@ class RemoteError(StorageError):
     def __init__(self, status, code):
         self.status = status
         self.code = code
-        super().__init__("Supabase no pudo completar la operación. Revisa conexión, tablas y configuración.")
+        message = "Supabase no pudo completar la operación. Revisa conexión, tablas y configuración."
+        if status == 401:
+            message = "Supabase rechazó la clave. Actualiza SUPABASE_SECRET_KEY en la configuración de esta instalación."
+        super().__init__(message)
 
 
 class SupabaseStore:
@@ -106,7 +109,9 @@ class SupabaseStore:
             payload.update(uploaded)
         try:
             self.write("POST", payload, None, uploaded)
-        except StorageError:
+        except StorageError as exc:
+            if isinstance(exc, RemoteError) and exc.status in {400, 401, 403, 404}:
+                raise
             # The server may have committed despite a lost response. Recover this exact registration.
             try:
                 if self.lookup(email, token):

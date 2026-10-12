@@ -68,10 +68,13 @@ class AlreadyRegisteredError(ValueError):
 
 
 def remote_store():
-    if setting("SUPABASE_URL") or setting("SUPABASE_SECRET_KEY"):
-        from supabase_store import SupabaseStore
-        return SupabaseStore()
-    return None
+    backend = setting("STORAGE_BACKEND", "supabase")
+    if backend == "sqlite":
+        return None
+    if backend != "supabase":
+        raise StorageError("STORAGE_BACKEND debe ser supabase o sqlite.")
+    from supabase_store import SupabaseStore
+    return SupabaseStore()
 
 
 def db_path():

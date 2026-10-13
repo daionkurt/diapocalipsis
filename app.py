@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from html import escape
 from pathlib import Path
 import csv
+import base64
 import io
 import secrets
 import sqlite3
@@ -27,7 +28,11 @@ st.set_page_config(page_title="Diapocalipsis · El contacto", page_icon="👁️
 st.markdown(f"<style>{(ROOT / 'assets/style.css').read_text()}</style>", unsafe_allow_html=True)
 if not st.session_state.get("intro_seen"):
     st.session_state.intro_seen = True
-    st.html((ROOT / "assets/contact-intro.html").read_text())
+    intro = (ROOT / "assets/contact-intro.html").read_text()
+    for kind in ("ufo", "alien"):
+        svg = base64.b64encode((ROOT / f"assets/contact-{kind}.svg").read_bytes()).decode("ascii")
+        intro = intro.replace("{{" + kind.upper() + "_IMAGE}}", "data:image/svg+xml;base64," + svg)
+    st.html(intro)
 
 
 def html(text):

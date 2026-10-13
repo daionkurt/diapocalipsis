@@ -1,0 +1,8 @@
+<svg class="contact-ufo" viewBox="0 0 600 260" xmlns="http://www.w3.org/2000/svg">
+   <defs><linearGradient id="contact-hull" x2="0" y2="1"><stop stop-color="#647064"/><stop offset=".5" stop-color="#242d28"/><stop offset="1" stop-color="#101814"/></linearGradient><radialGradient id="contact-window"><stop stop-color="#c6d3b7"/><stop offset="1" stop-color="#46534a"/></radialGradient></defs>
+   <path d="M192 132 Q200 33 300 30 Q400 33 408 132" fill="url(#contact-window)" stroke="#b7baa2" stroke-width="2"/>
+   <path d="M72 130 Q300 51 528 130 Q585 163 300 223 Q15 163 72 130Z" fill="url(#contact-hull)" stroke="#929a84" stroke-width="3"/>
+   <ellipse cx="300" cy="133" rx="244" ry="39" fill="url(#contact-hull)" stroke="#a6af94" stroke-width="2"/>
+   <ellipse cx="300" cy="181" rx="68" ry="15" fill="#f5eac9"/>
+   <g fill="#e8ddc5"><ellipse cx="120" cy="145" rx="13" ry="5"/><ellipse cx="205" cy="160" rx="13" ry="5"/><ellipse cx="395" cy="160" rx="13" ry="5"/><ellipse cx="480" cy="145" rx="13" ry="5"/></g>
+  </svg>

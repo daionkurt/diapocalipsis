@@ -1,0 +1,7 @@
+<svg class="contact-alien" viewBox="0 0 130 180" xmlns="http://www.w3.org/2000/svg">
+   <path d="M36 178 Q28 128 48 114 L82 114 Q102 128 94 178" fill="#657e68"/>
+   <path d="M14 51 Q8 2 65 3 Q122 2 116 51 Q109 98 65 122 Q21 98 14 51Z" fill="#a8b998" stroke="#cdd0af" stroke-width="2"/>
+   <path d="M24 40 Q58 43 57 76 Q26 73 24 40Z" fill="#0d1512"/><path d="M106 40 Q72 43 73 76 Q104 73 106 40Z" fill="#0d1512"/>
+   <path d="M55 95 Q65 101 75 95" fill="none" stroke="#435640" stroke-width="3" stroke-linecap="round"/>
+   <path d="M93 142 Q118 124 114 102 M114 112 L103 104 M114 112 L121 99" fill="none" stroke="#a8b998" stroke-width="8" stroke-linecap="round"/>
+  </svg>

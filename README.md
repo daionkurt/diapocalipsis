@@ -109,3 +109,5 @@ El apartado **Organizador** solo aparece en `https://diapocalipsis.streamlit.app
 ### Rendimiento de los botones
 
 Solo se ejecuta la pestaña abierta. La ruleta se actualiza como un fragmento independiente: cada giro hace una selección y una lectura de estado, sin volver a procesar los demás apartados. Los archivos se obtienen únicamente al pulsar Descargar, con validación de acceso y sin reejecutar la página. La lista de asistentes se conserva cinco segundos por sesión y se invalida inmediatamente después de guardar cambios.
+
+Al abrir o recargar la app aparece un contacto extraterrestre animado de 2.7 segundos. La entrada se reproduce una vez por sesión de página, no al guardar cambios ni al girar la ruleta. Es SVG/CSS local, sin sonido ni solicitudes externas, y respeta la preferencia de movimiento reducido.

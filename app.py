@@ -25,6 +25,9 @@ SAFETY_PROTOCOL = (
 )
 st.set_page_config(page_title="Diapocalipsis · El contacto", page_icon="👁️", layout="wide")
 st.markdown(f"<style>{(ROOT / 'assets/style.css').read_text()}</style>", unsafe_allow_html=True)
+if not st.session_state.get("intro_seen"):
+    st.session_state.intro_seen = True
+    st.html((ROOT / "assets/contact-intro.html").read_text())
 
 
 def html(text):

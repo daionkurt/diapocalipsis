@@ -1,10 +1,10 @@
 <style>
-.contact-intro{position:fixed;inset:0;z-index:999999;display:grid;place-items:center;background:radial-gradient(ellipse at 50% 42%,#27392ee8,#080b0af5 72%);pointer-events:none;overflow:hidden;animation:contact-overlay 2.7s ease both;}
+.contact-intro{position:fixed;inset:0;z-index:999999;display:grid;place-items:center;background:radial-gradient(ellipse at 50% 42%,#27392ee8,#080b0af5 72%);pointer-events:none;overflow:hidden;animation:contact-overlay 4s ease both;}
 .contact-scene{width:min(580px,92vw);height:min(620px,90vh);position:relative;display:grid;place-items:center;}
-.contact-ufo{position:absolute;top:8%;width:100%;height:45%;filter:drop-shadow(0 0 26px #b8cfaa55);animation:contact-flight 2.7s cubic-bezier(.2,.7,.3,1) both;}
-.contact-beam{position:absolute;top:35%;width:70%;height:57%;background:linear-gradient(#f0e7bd77,#d2dcb41a 70%,transparent);clip-path:polygon(42% 0,58% 0,100% 100%,0 100%);animation:contact-light 2.7s ease both;}
-.contact-alien{position:absolute;top:47%;width:24%;height:29%;filter:drop-shadow(0 0 16px #d8d4a345);animation:contact-visitor 2.7s ease both;}
-.contact-message{position:absolute;bottom:6%;color:#e8ddc5;font:14px Georgia,serif;letter-spacing:5px;text-align:center;text-transform:uppercase;animation:contact-light 2.7s ease both;}
+.contact-ufo{position:absolute;top:8%;width:100%;height:45%;filter:drop-shadow(0 0 26px #b8cfaa55);animation:contact-flight 4s cubic-bezier(.2,.7,.3,1) both;}
+.contact-beam{position:absolute;top:35%;width:70%;height:57%;background:linear-gradient(#f0e7bd77,#d2dcb41a 70%,transparent);clip-path:polygon(42% 0,58% 0,100% 100%,0 100%);animation:contact-light 4s ease both;}
+.contact-alien{position:absolute;top:47%;width:24%;height:29%;filter:drop-shadow(0 0 16px #d8d4a345);animation:contact-visitor 4s ease both;}
+.contact-message{position:absolute;bottom:6%;color:#e8ddc5;font:14px Georgia,serif;letter-spacing:5px;text-align:center;text-transform:uppercase;animation:contact-light 4s ease both;}
 @keyframes contact-overlay{0%{opacity:0;visibility:visible}12%,80%{opacity:1}100%{opacity:0;visibility:hidden}}
 @keyframes contact-flight{0%{transform:translate(-100vw,-40vh) rotate(-18deg) scale(.3)}24%,72%{transform:translate(0,0) rotate(0) scale(1)}100%{transform:translate(90vw,-90vh) rotate(16deg) scale(.25)}}
 @keyframes contact-light{0%,20%{opacity:0}32%,73%{opacity:1}90%,100%{opacity:0}}

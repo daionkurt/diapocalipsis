@@ -29,7 +29,7 @@ st.markdown(f"<style>{(ROOT / 'assets/style.css').read_text()}</style>", unsafe_
 if not st.session_state.get("intro_seen"):
     st.session_state.intro_seen = True
     intro = (ROOT / "assets/contact-intro.html").read_text()
-    for kind in ("ufo", "alien"):
+    for kind in ("ufo", "alien", "werewolf", "vampire", "witch", "cryptid", "ghost", "mummy"):
         svg = base64.b64encode((ROOT / f"assets/contact-{kind}.svg").read_bytes()).decode("ascii")
         intro = intro.replace("{{" + kind.upper() + "_IMAGE}}", "data:image/svg+xml;base64," + svg)
     st.html(intro)
